@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -25,6 +25,14 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const syncingSourceRef = useRef<'top' | 'table' | null>(null);
+
   const pageSize = 50;
 
   const filtered = useMemo(() => {
@@ -43,6 +51,64 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
     const start = (safePage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, safePage]);
+
+  const measureOverflow = useCallback(() => {
+    const container = tableScrollRef.current;
+    const table = tableRef.current;
+    if (!container || !table) return;
+    const scrollW = table.scrollWidth;
+    const clientW = container.clientWidth;
+    setTableScrollWidth(scrollW);
+    setHasHorizontalOverflow(scrollW > clientW + 2);
+  }, []);
+
+  useEffect(() => {
+    measureOverflow();
+    const container = tableScrollRef.current;
+    const table = tableRef.current;
+    if (!container || !table || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      measureOverflow();
+    });
+    observer.observe(container);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [measureOverflow, columns, paged]);
+
+  const handleTopScroll = () => {
+    if (syncingSourceRef.current === 'table') {
+      syncingSourceRef.current = null;
+      return;
+    }
+    const topEl = topScrollRef.current;
+    const tableEl = tableScrollRef.current;
+    if (!topEl || !tableEl) return;
+    syncingSourceRef.current = 'top';
+    tableEl.scrollLeft = topEl.scrollLeft;
+    requestAnimationFrame(() => {
+      if (syncingSourceRef.current === 'top') {
+        syncingSourceRef.current = null;
+      }
+    });
+  };
+
+  const handleTableScroll = () => {
+    if (syncingSourceRef.current === 'top') {
+      syncingSourceRef.current = null;
+      return;
+    }
+    const topEl = topScrollRef.current;
+    const tableEl = tableScrollRef.current;
+    if (!topEl || !tableEl) return;
+    syncingSourceRef.current = 'table';
+    topEl.scrollLeft = tableEl.scrollLeft;
+    requestAnimationFrame(() => {
+      if (syncingSourceRef.current === 'table') {
+        syncingSourceRef.current = null;
+      }
+    });
+  };
 
   const handleExport = () => {
     const esc = (v: string) => {
@@ -117,50 +183,73 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
           Nenhuma linha encontrada na planilha.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-[#EADFD1] bg-[#FAF4EA] text-xs font-bold text-[#5E4E42]">
-                <th className="py-3 px-4 text-right font-mono text-[#8C7A6B] w-12">
-                  #
-                </th>
-                {columns.map((col) => (
-                  <th key={col.key} className="py-3 px-4 whitespace-nowrap">
-                    {col.label}
+        <div>
+          {hasHorizontalOverflow && (
+            <div
+              ref={topScrollRef}
+              onScroll={handleTopScroll}
+              aria-label="Barra de rolagem horizontal superior"
+              className="overflow-x-auto overflow-y-hidden clay-scrollbar border-b border-[#EADFD1] bg-[#FAF4EA] px-1 py-1"
+            >
+              <div style={{ width: `${tableScrollWidth}px`, height: '2px' }} />
+            </div>
+          )}
+
+          <div
+            ref={tableScrollRef}
+            onScroll={handleTableScroll}
+            className="overflow-auto max-h-[65vh] clay-scrollbar"
+          >
+            <table ref={tableRef} className="w-full text-left border-collapse">
+              <thead className="sticky top-0 z-10 shadow-[0_1px_0_#EADFD1]">
+                <tr className="border-b border-[#EADFD1] bg-[#FAF4EA] text-xs font-bold text-[#5E4E42]">
+                  <th className="py-3 px-4 text-right font-mono text-[#8C7A6B] w-12 bg-[#FAF4EA]">
+                    #
                   </th>
-                ))}
-                <th className="py-3 px-3 w-10" aria-label="Inspecionar" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#EFE5D8] text-xs">
-              {paged.map((row) => (
-                <tr
-                  key={row.rowIndex}
-                  onClick={() => onInspectRow(row)}
-                  className="hover:bg-[#F7EFE4] transition-colors cursor-pointer"
-                >
-                  <td className="py-3 px-4 text-right font-mono tabular-nums text-[#8C7A6B]">
-                    {row.rowIndex}
-                  </td>
-                  {columns.map((col) => {
-                    const val = row.cells[col.key]?.formatted;
-                    return (
-                      <td
-                        key={col.key}
-                        className="py-3 px-4 max-w-[280px] truncate text-[#2C221E]"
-                        title={val || ''}
-                      >
-                        {val || <span className="text-[#C7B8A6]">—</span>}
-                      </td>
-                    );
-                  })}
-                  <td className="py-3 px-3 text-right">
-                    <Eye className="w-3.5 h-3.5 text-[#8C7A6B] inline-block" />
-                  </td>
+                  {columns.map((col) => (
+                    <th
+                      key={col.key}
+                      className="py-3 px-4 whitespace-nowrap bg-[#FAF4EA]"
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                  <th
+                    className="py-3 px-3 w-10 bg-[#FAF4EA]"
+                    aria-label="Inspecionar"
+                  />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[#EFE5D8] text-xs">
+                {paged.map((row) => (
+                  <tr
+                    key={row.rowIndex}
+                    onClick={() => onInspectRow(row)}
+                    className="hover:bg-[#F7EFE4] transition-colors cursor-pointer"
+                  >
+                    <td className="py-3 px-4 text-right font-mono tabular-nums text-[#8C7A6B]">
+                      {row.rowIndex}
+                    </td>
+                    {columns.map((col) => {
+                      const val = row.cells[col.key]?.formatted;
+                      return (
+                        <td
+                          key={col.key}
+                          className="py-3 px-4 max-w-[280px] truncate text-[#2C221E]"
+                          title={val || ''}
+                        >
+                          {val || <span className="text-[#C7B8A6]">—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="py-3 px-3 text-right">
+                      <Eye className="w-3.5 h-3.5 text-[#8C7A6B] inline-block" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

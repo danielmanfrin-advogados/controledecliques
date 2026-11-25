@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   clearCachedToken,
+  FIREBASE_PROJECT_ID,
   getAccessToken,
   googleSignIn,
   initAuth,
@@ -56,6 +57,7 @@ import { PeriodControlBar } from './components/PeriodControlBar';
 import { ClickKpiStrip } from './components/ClickKpiStrip';
 import { SitePagesExplorer } from './components/SitePagesExplorer';
 import { HourlyAndTimelineSection } from './components/HourlyAndTimelineSection';
+import { HourlyRecordsPanel } from './components/HourlyRecordsPanel';
 import { ClickLogTable } from './components/ClickLogTable';
 import { RawSheetTable } from './components/RawSheetTable';
 import { ColumnMappingModal } from './components/ColumnMappingModal';
@@ -720,9 +722,20 @@ export default function App() {
           <div className="max-w-4xl mx-auto mt-4 px-6">
             <div
               role="alert"
-              className="p-3.5 rounded-2xl bg-[#FDE4E1] border border-[#E8A39A] text-xs text-[#8F2D22]"
+              className="p-3.5 rounded-2xl bg-[#FDE4E1] border border-[#E8A39A] text-xs text-[#8F2D22] flex flex-wrap items-center justify-between gap-2"
             >
-              {authError}
+              <span>{authError}</span>
+              {FIREBASE_PROJECT_ID && (
+                <a
+                  href={`https://console.cloud.google.com/auth/audience?project=${FIREBASE_PROJECT_ID}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-[#8F2D22] font-bold text-white hover:bg-[#732118] shrink-0"
+                >
+                  <span>Liberar contas no Google Cloud</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
           </div>
         )}
@@ -1194,16 +1207,36 @@ export default function App() {
               )}
 
               {activeSection === 'hours' && (
-                <HourlyAndTimelineSection
-                  hourlyBuckets={hourlyBuckets}
-                  timelineBuckets={timelineBuckets}
-                  period={period}
-                  periodLabel={periodLabel}
-                  selectedHour={selectedHour}
-                  onToggleHour={(hr) =>
-                    setSelectedHour((prev) => (prev === hr ? null : hr))
-                  }
-                />
+                <>
+                  <HourlyAndTimelineSection
+                    hourlyBuckets={hourlyBuckets}
+                    timelineBuckets={timelineBuckets}
+                    period={period}
+                    periodLabel={periodLabel}
+                    selectedHour={selectedHour}
+                    onToggleHour={(hr) =>
+                      setSelectedHour((prev) => (prev === hr ? null : hr))
+                    }
+                  />
+
+                  <HourlyRecordsPanel
+                    events={siteAndPageEvents}
+                    siteColorIndexMap={siteColorIndexMap}
+                    selectedHour={selectedHour}
+                    onToggleHour={(hr) =>
+                      setSelectedHour((prev) => (prev === hr ? null : hr))
+                    }
+                    periodLabel={periodLabel}
+                  />
+
+                  <ClickLogTable
+                    spreadsheetTitle={dataset.spreadsheetTitle}
+                    sheetTitle={dataset.sheetTitle}
+                    events={scopedEvents}
+                    siteColorIndexMap={siteColorIndexMap}
+                    onInspectRow={setInspectedRow}
+                  />
+                </>
               )}
 
               {activeSection === 'logs' && (

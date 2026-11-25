@@ -108,6 +108,22 @@ export const AuthGate: React.FC<AuthGateProps> = ({
                     </a>
                   </div>
                 )}
+                {!isDomainError && FIREBASE_PROJECT_ID && (
+                  <div className="pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-[#E8A39A]/60 text-xs">
+                    <span>
+                      Apareceu <strong>Erro 403 (em fase de testes)</strong> para outro e-mail? Libere o e-mail ou publique o app no Google Cloud:
+                    </span>
+                    <a
+                      href={`https://console.cloud.google.com/auth/audience?project=${FIREBASE_PROJECT_ID}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8F2D22] text-xs font-bold text-white hover:bg-[#732118] shrink-0"
+                    >
+                      <span>Abrir Google Cloud</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
               </div>
             )}
           </div>
