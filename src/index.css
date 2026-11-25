@@ -1,0 +1,204 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+    --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: #f5efe6;
+    color: #2c221e;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono, .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Tactile Claymorphism Surfaces inspired by soft warm-pastel 3D UI */
+.clay-shell {
+  background-color: #fcf7ee;
+  box-shadow:
+    0 20px 45px -15px rgba(74, 57, 42, 0.12),
+    inset 0 2px 4px rgba(255, 255, 255, 0.9);
+}
+
+.clay-sidebar {
+  background-color: #c9dbd3;
+  box-shadow:
+    6px 10px 24px -8px rgba(74, 57, 42, 0.14),
+    inset 2px 2px 6px rgba(255, 255, 255, 0.65),
+    inset -2px -3px 8px rgba(105, 134, 121, 0.18);
+}
+
+.clay-card {
+  background-color: #fdf9f2;
+  box-shadow:
+    0 10px 24px -8px rgba(74, 57, 42, 0.1),
+    inset 0 2px 4px rgba(255, 255, 255, 0.85),
+    inset 0 -2px 5px rgba(188, 168, 145, 0.12);
+}
+
+.clay-peach {
+  background-color: #f9d5be;
+  box-shadow:
+    0 12px 26px -8px rgba(168, 98, 58, 0.16),
+    inset 0 2px 5px rgba(255, 245, 238, 0.8),
+    inset 0 -3px 6px rgba(214, 146, 108, 0.22);
+}
+
+.clay-sage {
+  background-color: #e6ead6;
+  box-shadow:
+    0 10px 22px -8px rgba(84, 96, 62, 0.14),
+    inset 0 2px 5px rgba(255, 255, 255, 0.78),
+    inset 0 -2px 6px rgba(162, 172, 132, 0.2);
+}
+
+.clay-butter {
+  background-color: #f6e4c3;
+  box-shadow:
+    0 10px 22px -8px rgba(148, 112, 54, 0.14),
+    inset 0 2px 5px rgba(255, 250, 238, 0.8),
+    inset 0 -2px 6px rgba(204, 168, 106, 0.2);
+}
+
+.clay-lavender {
+  background-color: #e4e0ef;
+  box-shadow:
+    0 10px 22px -8px rgba(84, 76, 122, 0.14),
+    inset 0 2px 5px rgba(255, 255, 255, 0.8),
+    inset 0 -2px 6px rgba(166, 158, 202, 0.2);
+}
+
+.clay-button-active {
+  background-color: #fdf8ee;
+  box-shadow:
+    0 6px 14px -4px rgba(62, 52, 42, 0.14),
+    inset 0 2px 3px rgba(255, 255, 255, 0.9);
+}
+
+.clay-coral-btn {
+  background-color: #e36a42;
+  box-shadow:
+    0 8px 18px -5px rgba(227, 106, 66, 0.45),
+    inset 0 2px 3px rgba(255, 215, 198, 0.45),
+    inset 0 -2px 4px rgba(168, 62, 30, 0.3);
+}
+
+.clay-coral-btn:hover {
+  background-color: #d65c34;
+}
+
+.clay-icon-tile {
+  box-shadow:
+    0 6px 14px -4px rgba(44, 34, 30, 0.22),
+    inset 0 2px 3px rgba(255, 255, 255, 0.45),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.16);
+}
+
+.clay-input {
+  background-color: #fdf9f2;
+  box-shadow:
+    inset 0 2px 5px rgba(130, 108, 86, 0.1),
+    0 2px 6px rgba(74, 57, 42, 0.05);
+}
+
+/* Official Google Sign-In Material Button Styling */
+.gsi-material-button {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  -webkit-appearance: none;
+  background-color: #ffffff;
+  background-image: none;
+  border: 1px solid #d5c8b8;
+  border-radius: 14px;
+  box-sizing: border-box;
+  color: #2c221e;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  height: 46px;
+  letter-spacing: 0.2px;
+  outline: none;
+  overflow: hidden;
+  padding: 0 18px;
+  position: relative;
+  text-align: center;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
+  vertical-align: middle;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 8px 18px -6px rgba(74, 57, 42, 0.14),
+    inset 0 2px 3px rgba(255, 255, 255, 0.9);
+}
+
+.gsi-material-button .gsi-material-button-icon {
+  height: 20px;
+  margin-right: 12px;
+  min-width: 20px;
+  width: 20px;
+}
+
+.gsi-material-button .gsi-material-button-content-wrapper {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  height: 100%;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+}
+
+.gsi-material-button .gsi-material-button-contents {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+
+.gsi-material-button .gsi-material-button-state {
+  transition: opacity 0.2s;
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.gsi-material-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.gsi-material-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 12px 22px -6px rgba(74, 57, 42, 0.18),
+    inset 0 2px 3px rgba(255, 255, 255, 0.95);
+}
+
+.gsi-material-button:not(:disabled):hover .gsi-material-button-state {
+  background-color: #303030;
+  opacity: 0.04;
+}
+
+.gsi-material-button:focus-visible {
+  outline: 2px solid #e36a42;
+  outline-offset: 2px;
+}

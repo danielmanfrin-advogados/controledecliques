@@ -1,0 +1,6 @@
+{
+  "name": "SheetsPulse — Dashboard Interativo",
+  "description": "Transforme planilhas do Google Sheets em dashboards interativos com atualizações em tempo real, gráficos dinâmicos e filtros avançados.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
