@@ -71,9 +71,10 @@ function formatFirebaseAuthError(err: unknown): Error {
     );
   }
 
+  const detail = code ? ` (${code})` : '';
   return err instanceof Error
-    ? err
-    : new Error('Não foi possível concluir o login com o Google.');
+    ? new Error(`${err.message}${detail && !err.message.includes(code) ? detail : ''}`)
+    : new Error(`Não foi possível concluir o login com o Google${detail}.`);
 }
 
 export const initAuth = (
@@ -136,9 +137,12 @@ export const googleSignIn = async (): Promise<{
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code ?? '';
+    const isTopLevel =
+      typeof window !== 'undefined' && window.self === window.top;
     if (
-      code === 'auth/popup-blocked' ||
-      code === 'auth/operation-not-supported-in-this-environment'
+      isTopLevel &&
+      (code === 'auth/popup-blocked' ||
+        code === 'auth/operation-not-supported-in-this-environment')
     ) {
       await signInWithRedirect(auth, provider);
       throw new Error('Redirecionando para o login do Google...');

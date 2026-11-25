@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { User } from 'firebase/auth';
 import {
+  Check,
   Clock,
+  Copy,
   ExternalLink,
   Globe,
   RefreshCw,
@@ -23,11 +25,27 @@ export const AuthGate: React.FC<AuthGateProps> = ({
   errorMessage,
   existingUser,
 }) => {
+  const [copiedHost, setCopiedHost] = useState(false);
+
   const isDomainError = Boolean(
     errorMessage &&
       (errorMessage.includes('Domínio não autorizado') ||
         errorMessage.includes('Authorized domains'))
   );
+
+  const currentHost =
+    typeof window !== 'undefined' ? window.location.hostname : '';
+
+  const handleCopyHost = async () => {
+    if (!currentHost) return;
+    try {
+      await navigator.clipboard.writeText(currentHost);
+      setCopiedHost(true);
+      window.setTimeout(() => setCopiedHost(false), 2000);
+    } catch {
+      // Ignore clipboard failure
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F5EFE6] flex items-center justify-center p-6">
@@ -55,19 +73,40 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             {errorMessage && (
               <div
                 role="alert"
-                className="mb-6 p-4 rounded-2xl bg-[#FDE4E1] border border-[#E8A39A] text-sm text-[#8F2D22] space-y-2"
+                className="mb-6 p-4 rounded-2xl bg-[#FDE4E1] border border-[#E8A39A] text-sm text-[#8F2D22] space-y-3"
               >
                 <p>{errorMessage}</p>
                 {isDomainError && FIREBASE_PROJECT_ID && (
-                  <a
-                    href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold underline text-[#8F2D22] hover:text-[#661D15]"
-                  >
-                    <span>Abrir Domínios Autorizados no Firebase</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {currentHost && (
+                      <button
+                        type="button"
+                        onClick={handleCopyHost}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/80 text-xs font-bold text-[#8F2D22] hover:bg-white cursor-pointer"
+                      >
+                        {copiedHost ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-[#366B62]" />
+                            <span>Domínio copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copiar: {currentHost}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <a
+                      href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8F2D22] text-xs font-bold text-white hover:bg-[#732118]"
+                    >
+                      <span>Autorizar no Firebase</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 )}
               </div>
             )}
