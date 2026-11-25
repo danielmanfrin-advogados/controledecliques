@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDownUp,
   ChevronLeft,
   ChevronRight,
   Download,
   Eye,
+  List,
   Search,
 } from 'lucide-react';
 import { ColumnSchema, ParsedRow } from '../types/sheets';
@@ -25,6 +27,8 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const [newestFirst, setNewestFirst] = useState(false);
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
 
@@ -37,20 +41,25 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) =>
-      columns.some((c) =>
-        (row.cells[c.key]?.formatted ?? '').toLowerCase().includes(q)
-      )
-    );
-  }, [rows, columns, query]);
+    const matched = !q
+      ? rows
+      : rows.filter((row) =>
+          columns.some((c) =>
+            (row.cells[c.key]?.formatted ?? '').toLowerCase().includes(q)
+          )
+        );
+    return newestFirst ? [...matched].reverse() : matched;
+  }, [rows, columns, query, newestFirst]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages = showAll
+    ? 1
+    : Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const paged = useMemo(() => {
+    if (showAll) return filtered;
     const start = (safePage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
-  }, [filtered, safePage]);
+  }, [filtered, safePage, showAll]);
 
   const measureOverflow = useCallback(() => {
     const container = tableScrollRef.current;
@@ -140,40 +149,89 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
       aria-label="Planilha completa"
       className="clay-card rounded-[28px] overflow-hidden"
     >
-      <div className="px-6 py-5 border-b border-[#EADFD1] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold text-[#2C221E]">
-            Dados Completos da Aba "{sheetTitle}"
-          </h2>
-          <p className="text-xs text-[#6E5F54] mt-0.5 tabular-nums">
-            {filtered.length.toLocaleString('pt-BR')} linhas · {columns.length}{' '}
-            colunas lidas diretamente do Google Sheets
-          </p>
+      <div className="px-6 py-5 border-b border-[#EADFD1] flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-[#2C221E]">
+              Dados Completos da Aba "{sheetTitle}"
+            </h2>
+            <p className="text-xs text-[#6E5F54] mt-0.5 tabular-nums">
+              {filtered.length.toLocaleString('pt-BR')} linhas · {columns.length}{' '}
+              colunas ·{' '}
+              {newestFirst
+                ? 'Iniciando pelo último clique'
+                : 'Ordem original da planilha'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-[#8C7A6B] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Buscar na planilha..."
+                className="pl-8 pr-3 py-2 text-xs rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] placeholder:text-[#9A897A] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={filtered.length === 0}
+              className="px-3.5 py-2 text-xs font-bold rounded-2xl clay-button-active text-[#2C221E] hover:text-[#E36A42] disabled:opacity-45 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar CSV</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-[#8C7A6B] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar na planilha..."
-              className="pl-8 pr-3 py-2 text-xs rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] placeholder:text-[#9A897A] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setNewestFirst((prev) => !prev);
+              setPage(1);
+            }}
+            aria-pressed={newestFirst}
+            className={`px-3.5 py-2 text-xs font-bold rounded-2xl inline-flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap ${
+              newestFirst
+                ? 'clay-coral-btn text-white'
+                : 'clay-button-active text-[#2C221E] hover:text-[#E36A42]'
+            }`}
+          >
+            <ArrowDownUp className="w-3.5 h-3.5" />
+            <span>
+              {newestFirst
+                ? 'Último clique primeiro (ativo)'
+                : 'Iniciar pelo último clique'}
+            </span>
+          </button>
 
           <button
             type="button"
-            onClick={handleExport}
-            disabled={filtered.length === 0}
-            className="px-3.5 py-2 text-xs font-bold rounded-2xl clay-button-active text-[#2C221E] hover:text-[#E36A42] disabled:opacity-45 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            onClick={() => {
+              setShowAll((prev) => !prev);
+              setPage(1);
+            }}
+            aria-pressed={showAll}
+            className={`px-3.5 py-2 text-xs font-bold rounded-2xl inline-flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap ${
+              showAll
+                ? 'clay-coral-btn text-white'
+                : 'clay-button-active text-[#2C221E] hover:text-[#E36A42]'
+            }`}
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Exportar CSV</span>
+            <List className="w-3.5 h-3.5" />
+            <span>
+              {showAll
+                ? `Mostrando todos (${filtered.length.toLocaleString('pt-BR')})`
+                : `Ver todos em 1 página (${filtered.length.toLocaleString('pt-BR')})`}
+            </span>
           </button>
         </div>
       </div>
@@ -253,7 +311,7 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
         </div>
       )}
 
-      {filtered.length > pageSize && (
+      {!showAll && filtered.length > pageSize && (
         <div className="px-6 py-4 border-t border-[#EADFD1] flex items-center justify-between text-xs text-[#6E5F54]">
           <span className="font-mono tabular-nums">
             Página {safePage} de {totalPages}
