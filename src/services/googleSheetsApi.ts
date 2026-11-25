@@ -71,7 +71,8 @@ export async function listUserSpreadsheets(
     q: queryParts.join(' and '),
     orderBy: 'modifiedTime desc',
     pageSize: '30',
-    fields: 'files(id,name,modifiedTime,webViewLink,owners(displayName,emailAddress))',
+    fields:
+      'files(id,name,modifiedTime,webViewLink,owners(displayName,emailAddress))',
     supportsAllDrives: 'true',
     includeItemsFromAllDrives: 'true',
   });

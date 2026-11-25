@@ -14,6 +14,7 @@ import {
   Search,
   SlidersHorizontal,
   Table2,
+  UserRoundCog,
   X,
 } from 'lucide-react';
 import {
@@ -157,6 +158,39 @@ export default function App() {
         err instanceof Error
           ? err.message
           : 'Não foi possível concluir o login com o Google.';
+      setAuthError(msg);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleSwitchAccount = async () => {
+    setAuthError(null);
+    setIsLoggingIn(true);
+    try {
+      const result = await googleSignIn();
+      setUser(result.user);
+      setAvatarFailed(false);
+      setAccessToken(result.accessToken);
+      setNeedsAuth(false);
+      setSelectedSpreadsheetId(null);
+      setActiveSheetTitle('');
+      setExplicitHeaderRow(undefined);
+      setMetadata(null);
+      setDataset(null);
+      setRawValues(null);
+      setCustomMapping(null);
+      setLoadError(null);
+      setSyncDiff(null);
+      setSelectedSite(null);
+      setSelectedPage(null);
+      setSelectedHour(null);
+      setShowPickerModal(false);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível trocar de conta Google.';
       setAuthError(msg);
     } finally {
       setIsLoggingIn(false);
@@ -682,11 +716,23 @@ export default function App() {
           </button>
         </div>
 
+        {authError && (
+          <div className="max-w-4xl mx-auto mt-4 px-6">
+            <div
+              role="alert"
+              className="p-3.5 rounded-2xl bg-[#FDE4E1] border border-[#E8A39A] text-xs text-[#8F2D22]"
+            >
+              {authError}
+            </div>
+          </div>
+        )}
+
         {accessToken && (
           <SpreadsheetPicker
             accessToken={accessToken}
             selectedSpreadsheetId={selectedSpreadsheetId}
             onSelectSpreadsheet={handleSelectSpreadsheet}
+            onSwitchAccount={handleSwitchAccount}
             onAuthExpired={handleAuthExpired}
           />
         )}
@@ -760,6 +806,18 @@ export default function App() {
         >
           <FolderOpen className="w-4 h-4 text-[#4C8F84]" />
           <span>Trocar planilha</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen(false);
+            handleSwitchAccount();
+          }}
+          className="w-full px-3.5 py-2.5 rounded-2xl text-xs font-bold text-[#3F5149] hover:bg-[#FCF7EE]/45 flex items-center gap-2.5 cursor-pointer transition-colors"
+        >
+          <UserRoundCog className="w-4 h-4 text-[#766BB0]" />
+          <span>Trocar conta Google</span>
         </button>
 
         {dataset && (
@@ -1177,6 +1235,7 @@ export default function App() {
           accessToken={accessToken}
           selectedSpreadsheetId={selectedSpreadsheetId}
           onSelectSpreadsheet={handleSelectSpreadsheet}
+          onSwitchAccount={handleSwitchAccount}
           onClose={() => setShowPickerModal(false)}
           isModal={true}
           onAuthExpired={handleAuthExpired}

@@ -5,6 +5,7 @@ import {
   Search,
   RefreshCw,
   ArrowRight,
+  UserRoundCog,
   X,
 } from 'lucide-react';
 import { DriveSpreadsheetFile } from '../types/sheets';
@@ -17,6 +18,7 @@ interface SpreadsheetPickerProps {
   accessToken: string;
   selectedSpreadsheetId: string | null;
   onSelectSpreadsheet: (spreadsheetId: string) => void;
+  onSwitchAccount?: () => void;
   onClose?: () => void;
   isModal?: boolean;
   onAuthExpired: () => void;
@@ -26,6 +28,7 @@ export const SpreadsheetPicker: React.FC<SpreadsheetPickerProps> = ({
   accessToken,
   selectedSpreadsheetId,
   onSelectSpreadsheet,
+  onSwitchAccount,
   onClose,
   isModal = false,
   onAuthExpired,
@@ -97,7 +100,7 @@ export const SpreadsheetPicker: React.FC<SpreadsheetPickerProps> = ({
 
   const content = (
     <div className="clay-shell rounded-[28px] w-full max-w-4xl mx-auto overflow-hidden">
-      <div className="px-7 py-5 border-b border-[#EADFD1] flex items-center justify-between gap-4">
+      <div className="px-7 py-5 border-b border-[#EADFD1] flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-[#2C221E]">
             Selecionar Planilha do Google Sheets
@@ -106,16 +109,28 @@ export const SpreadsheetPicker: React.FC<SpreadsheetPickerProps> = ({
             Escolha uma planilha do seu Drive ou cole o link diretamente.
           </p>
         </div>
-        {isModal && onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar seletor de planilhas"
-            className="p-2 rounded-xl clay-card text-[#5E4E42] hover:text-[#2C221E] cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {onSwitchAccount && (
+            <button
+              type="button"
+              onClick={onSwitchAccount}
+              className="px-3.5 py-2 rounded-xl clay-card text-xs font-bold text-[#4C8F84] hover:text-[#366B62] inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <UserRoundCog className="w-3.5 h-3.5" />
+              <span>Trocar conta Google</span>
+            </button>
+          )}
+          {isModal && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar seletor de planilhas"
+              className="p-2 rounded-xl clay-card text-[#5E4E42] hover:text-[#2C221E] cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-7 space-y-6">

@@ -48,9 +48,9 @@ export const AuthGate: React.FC<AuthGateProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#F5EFE6] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#F5EFE6] flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-4xl clay-shell rounded-[32px] p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-7 clay-peach rounded-3xl p-8 flex flex-col justify-between">
+        <div className="lg:col-span-7 clay-peach rounded-3xl p-7 sm:p-8 flex flex-col justify-between">
           <div>
             <p className="text-xs font-semibold text-[#8C4A2B] mb-3">
               Google Sheets · Monitoramento de Cliques
@@ -59,14 +59,14 @@ export const AuthGate: React.FC<AuthGateProps> = ({
               Veja os cliques de cada site e página de forma simples
             </h1>
             <p className="text-sm sm:text-base text-[#5E493C] leading-relaxed mb-8">
-              Conecte sua conta Google para abrir sua planilha e acompanhar por dia, semana, mês ou ano quantos cliques cada página recebeu e em quais horários.
+              Conecte qualquer conta Google para abrir suas planilhas e acompanhar por dia, semana, mês ou ano quantos cliques cada página recebeu e em quais horários.
             </p>
 
             {existingUser && (
               <div className="mb-6 p-4 rounded-2xl clay-card text-sm text-[#3D3028]">
                 Sessão identificada para{' '}
                 <span className="font-bold">{existingUser.email}</span>. Confirme
-                abaixo para renovar a leitura em tempo real.
+                abaixo ou escolha outra conta Google.
               </div>
             )}
 
@@ -120,7 +120,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
                 isLoggingIn
                   ? 'Conectando...'
                   : existingUser
-                  ? 'Reconectar com Google'
+                  ? 'Conectar ou trocar conta'
                   : 'Entrar com Google'
               }
             />
