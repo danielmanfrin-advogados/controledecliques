@@ -245,16 +245,34 @@ export default function App() {
           throw new Error('Esta planilha não possui abas visíveis.');
         }
 
+        const normalizeTab = (t: string) =>
+          t
+            .trim()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+        const preferredCliquesTab =
+          meta.sheets.find((s) => {
+            const norm = normalizeTab(s.title);
+            return norm === 'cliques' || norm === 'clique';
+          }) ??
+          meta.sheets.find((s) => {
+            const norm = normalizeTab(s.title);
+            return norm.includes('cliques') || norm.includes('clique');
+          });
+
         let resolvedTab =
           targetSheetTitle &&
           meta.sheets.some((s) => s.title === targetSheetTitle)
             ? targetSheetTitle
-            : meta.sheets[0].title;
+            : preferredCliquesTab?.title ?? meta.sheets[0].title;
 
         let values = await getSheetValues(spreadsheetId, resolvedTab, token);
 
         if (
           !targetSheetTitle &&
+          !preferredCliquesTab &&
           values.formattedRows.length <= 1 &&
           meta.sheets.length > 1
         ) {
