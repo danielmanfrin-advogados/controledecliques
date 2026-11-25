@@ -129,12 +129,15 @@ export default function App() {
         setNeedsAuth(false);
         setAuthReady(true);
       },
-      (existingUser) => {
+      (existingUser, errorMsg) => {
         setUser(existingUser);
         setAvatarFailed(false);
         setAccessToken(null);
         setNeedsAuth(true);
         setAuthReady(true);
+        if (errorMsg) {
+          setAuthError(errorMsg);
+        }
       }
     );
     return () => unsubscribe();

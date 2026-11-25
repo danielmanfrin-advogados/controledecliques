@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="clayBg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F2845E" />
+      <stop offset="100%" stop-color="#D95B32" />
+    </linearGradient>
+    <linearGradient id="barHighlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFDF9" />
+      <stop offset="100%" stop-color="#F6E4C3" />
+    </linearGradient>
+  </defs>
+
+  <!-- Tactile clay rounded square -->
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#clayBg)" />
+  <rect x="5" y="5" width="54" height="54" rx="15" stroke="#FFD6C4" stroke-opacity="0.65" stroke-width="2" />
+
+  <!-- Analytics bars -->
+  <rect x="16" y="33" width="8" height="16" rx="4" fill="url(#barHighlight)" />
+  <rect x="28" y="23" width="8" height="26" rx="4" fill="url(#barHighlight)" />
+  <rect x="40" y="15" width="8" height="34" rx="4" fill="#C9DBD3" />
+
+  <!-- Click indicator dot -->
+  <circle cx="44" cy="19" r="3.5" fill="#4C8F84" stroke="#FFFDF9" stroke-width="1.5" />
+</svg>

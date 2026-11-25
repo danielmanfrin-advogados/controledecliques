@@ -1,7 +1,14 @@
 import React from 'react';
 import { User } from 'firebase/auth';
-import { Clock, Globe, RefreshCw, ShieldCheck } from 'lucide-react';
+import {
+  Clock,
+  ExternalLink,
+  Globe,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 import { GoogleSignInButton } from './GoogleSignInButton';
+import { FIREBASE_PROJECT_ID } from '../services/firebaseAuth';
 
 interface AuthGateProps {
   onLogin: () => void;
@@ -16,6 +23,12 @@ export const AuthGate: React.FC<AuthGateProps> = ({
   errorMessage,
   existingUser,
 }) => {
+  const isDomainError = Boolean(
+    errorMessage &&
+      (errorMessage.includes('Domínio não autorizado') ||
+        errorMessage.includes('Authorized domains'))
+  );
+
   return (
     <div className="min-h-screen bg-[#F5EFE6] flex items-center justify-center p-6">
       <div className="w-full max-w-4xl clay-shell rounded-[32px] p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -42,9 +55,20 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             {errorMessage && (
               <div
                 role="alert"
-                className="mb-6 p-4 rounded-2xl bg-[#FDE4E1] border border-[#E8A39A] text-sm text-[#8F2D22]"
+                className="mb-6 p-4 rounded-2xl bg-[#FDE4E1] border border-[#E8A39A] text-sm text-[#8F2D22] space-y-2"
               >
-                {errorMessage}
+                <p>{errorMessage}</p>
+                {isDomainError && FIREBASE_PROJECT_ID && (
+                  <a
+                    href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold underline text-[#8F2D22] hover:text-[#661D15]"
+                  >
+                    <span>Abrir Domínios Autorizados no Firebase</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
               </div>
             )}
           </div>
