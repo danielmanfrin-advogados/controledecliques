@@ -62,6 +62,14 @@ export const googleSignIn = async (): Promise<{
 
     cachedAccessToken = credential.accessToken;
     return { user: result.user, accessToken: cachedAccessToken };
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    if (code === 'auth/unauthorized-domain') {
+      throw new Error(
+        `O domínio "${window.location.hostname}" ainda não está autorizado no Firebase Authentication. Adicione este domínio em Firebase Console > Authentication > Settings > Authorized domains.`
+      );
+    }
+    throw err;
   } finally {
     isSigningIn = false;
   }
