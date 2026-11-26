@@ -14,6 +14,8 @@ import { FIREBASE_PROJECT_ID } from '../services/firebaseAuth';
 
 interface AuthGateProps {
   onLogin: () => void;
+  onContinueExisting?: () => void;
+  onLogout?: () => void;
   isLoggingIn: boolean;
   errorMessage: string | null;
   existingUser: User | null;
@@ -21,6 +23,8 @@ interface AuthGateProps {
 
 export const AuthGate: React.FC<AuthGateProps> = ({
   onLogin,
+  onContinueExisting,
+  onLogout,
   isLoggingIn,
   errorMessage,
   existingUser,
@@ -35,6 +39,11 @@ export const AuthGate: React.FC<AuthGateProps> = ({
 
   const currentHost =
     typeof window !== 'undefined' ? window.location.hostname : '';
+
+  const existingFirstName =
+    existingUser?.displayName?.trim().split(/\s+/)[0] ||
+    existingUser?.email?.split('@')[0] ||
+    'sua conta';
 
   const handleCopyHost = async () => {
     if (!currentHost) return;
@@ -63,10 +72,14 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             </p>
 
             {existingUser && (
-              <div className="mb-6 p-4 rounded-2xl clay-card text-sm text-[#3D3028]">
-                Sessão identificada para{' '}
-                <span className="font-bold">{existingUser.email}</span>. Confirme
-                abaixo ou escolha outra conta Google.
+              <div className="mb-6 p-4 rounded-2xl clay-card text-sm text-[#3D3028] space-y-1">
+                <p>
+                  Você já está conectado como{' '}
+                  <span className="font-bold">{existingUser.email}</span>.
+                </p>
+                <p className="text-xs text-[#6E5F54]">
+                  Por segurança do Google ao recarregar a página, confirme em 1 clique para liberar a leitura da planilha ou escolha outra conta.
+                </p>
               </div>
             )}
 
@@ -128,21 +141,49 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             )}
           </div>
 
-          <div className="pt-4 flex flex-col sm:flex-row sm:items-center gap-4">
-            <GoogleSignInButton
-              onClick={onLogin}
-              disabled={isLoggingIn}
-              label={
-                isLoggingIn
-                  ? 'Conectando...'
-                  : existingUser
-                  ? 'Conectar ou trocar conta'
-                  : 'Entrar com Google'
-              }
-            />
-            <span className="text-xs text-[#6E5445]">
-              Acesso somente leitura às suas planilhas.
-            </span>
+          <div className="pt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {existingUser && onContinueExisting ? (
+                <>
+                  <GoogleSignInButton
+                    onClick={onContinueExisting}
+                    disabled={isLoggingIn}
+                    label={
+                      isLoggingIn
+                        ? 'Conectando...'
+                        : `Continuar como ${existingFirstName}`
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={onLogin}
+                    disabled={isLoggingIn}
+                    className="px-4 py-2.5 text-xs font-bold rounded-xl clay-button-active text-[#3D3028] hover:text-[#E36A42] disabled:opacity-50 cursor-pointer"
+                  >
+                    Usar outra conta
+                  </button>
+                  {onLogout && (
+                    <button
+                      type="button"
+                      onClick={onLogout}
+                      disabled={isLoggingIn}
+                      className="px-3 py-2.5 text-xs font-bold text-[#8F2D22] hover:underline disabled:opacity-50 cursor-pointer"
+                    >
+                      Sair
+                    </button>
+                  )}
+                </>
+              ) : (
+                <GoogleSignInButton
+                  onClick={onLogin}
+                  disabled={isLoggingIn}
+                  label={isLoggingIn ? 'Conectando...' : 'Entrar com Google'}
+                />
+              )}
+            </div>
+            <p className="text-xs text-[#6E5445]">
+              Seu login permanece salvo até você clicar em Sair. Acesso somente leitura às planilhas.
+            </p>
           </div>
         </div>
 

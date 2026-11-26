@@ -1,17 +1,22 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
+  browserLocalPersistence,
   getAuth,
-  signInWithPopup,
-  signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
+  setPersistence,
+  signInWithPopup,
+  signInWithRedirect,
   User,
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+// Keep Firebase user session persisted across browser restarts until explicit logout
+setPersistence(auth, browserLocalPersistence).catch(() => {});
 
 export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
 
@@ -20,13 +25,26 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/drive.metadata.readonly',
 ] as const;
 
-const provider = new GoogleAuthProvider();
-for (const scope of SCOPES) {
-  provider.addScope(scope);
+function createGoogleProvider(options?: {
+  selectAccount?: boolean;
+  loginHint?: string | null;
+}): GoogleAuthProvider {
+  const p = new GoogleAuthProvider();
+  for (const scope of SCOPES) {
+    p.addScope(scope);
+  }
+  const params: Record<string, string> = {};
+  if (options?.selectAccount) {
+    params.prompt = 'select_account';
+  }
+  if (options?.loginHint) {
+    params.login_hint = options.loginHint;
+  }
+  if (Object.keys(params).length > 0) {
+    p.setCustomParameters(params);
+  }
+  return p;
 }
-provider.setCustomParameters({
-  prompt: 'select_account',
-});
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
@@ -119,13 +137,15 @@ export const initAuth = (
   };
 };
 
-export const googleSignIn = async (): Promise<{
+async function signInWithProvider(
+  customProvider: GoogleAuthProvider
+): Promise<{
   user: User;
   accessToken: string;
-}> => {
+}> {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, customProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error(
@@ -144,13 +164,34 @@ export const googleSignIn = async (): Promise<{
       (code === 'auth/popup-blocked' ||
         code === 'auth/operation-not-supported-in-this-environment')
     ) {
-      await signInWithRedirect(auth, provider);
+      await signInWithRedirect(auth, customProvider);
       throw new Error('Redirecionando para o login do Google...');
     }
     throw formatFirebaseAuthError(err);
   } finally {
     isSigningIn = false;
   }
+}
+
+export const googleSignIn = async (): Promise<{
+  user: User;
+  accessToken: string;
+}> => {
+  return signInWithProvider(createGoogleProvider({ selectAccount: true }));
+};
+
+export const googleContinueSession = async (
+  emailHint?: string | null
+): Promise<{
+  user: User;
+  accessToken: string;
+}> => {
+  return signInWithProvider(
+    createGoogleProvider({
+      selectAccount: !emailHint,
+      loginHint: emailHint,
+    })
+  );
 };
 
 export const getAccessToken = (): string | null => {

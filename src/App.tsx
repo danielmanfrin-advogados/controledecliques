@@ -23,6 +23,7 @@ import {
   clearCachedToken,
   FIREBASE_PROJECT_ID,
   getAccessToken,
+  googleContinueSession,
   googleSignIn,
   initAuth,
   logout,
@@ -78,6 +79,50 @@ const SECTION_META: Record<NavSection, { title: string }> = {
   raw: { title: 'Planilha Completa' },
 };
 
+const LAST_SHEET_STORAGE_PREFIX = 'sheetspulse_last_sheet_';
+
+interface SavedSheetSelection {
+  spreadsheetId: string;
+  sheetTitle?: string;
+}
+
+function saveLastSheetSelection(
+  uid: string | undefined,
+  spreadsheetId: string,
+  sheetTitle?: string
+): void {
+  if (!uid || !spreadsheetId) return;
+  try {
+    window.localStorage.setItem(
+      `${LAST_SHEET_STORAGE_PREFIX}${uid}`,
+      JSON.stringify({ spreadsheetId, sheetTitle })
+    );
+  } catch {
+    // Ignore storage error
+  }
+}
+
+function loadLastSheetSelection(uid: string | undefined): SavedSheetSelection | null {
+  if (!uid) return null;
+  try {
+    const raw = window.localStorage.getItem(`${LAST_SHEET_STORAGE_PREFIX}${uid}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedSheetSelection;
+    return parsed?.spreadsheetId ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearLastSheetSelection(uid: string | undefined): void {
+  if (!uid) return;
+  try {
+    window.localStorage.removeItem(`${LAST_SHEET_STORAGE_PREFIX}${uid}`);
+  } catch {
+    // Ignore storage error
+  }
+}
+
 export default function App() {
   const [needsAuth, setNeedsAuth] = useState<boolean>(true);
   const [authReady, setAuthReady] = useState<boolean>(false);
@@ -85,6 +130,9 @@ export default function App() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [tokenNeedsRenewal, setTokenNeedsRenewal] = useState<boolean>(false);
+  const [isRenewingToken, setIsRenewingToken] = useState<boolean>(false);
+  const [renewalError, setRenewalError] = useState<string | null>(null);
   const [avatarFailed, setAvatarFailed] = useState<boolean>(false);
 
   const [selectedSpreadsheetId, setSelectedSpreadsheetId] = useState<
@@ -126,110 +174,35 @@ export default function App() {
 
   const datasetRef = useRef<ParsedSheetDataset | null>(null);
   datasetRef.current = dataset;
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
+  const selectedSpreadsheetIdRef = useRef<string | null>(null);
+  selectedSpreadsheetIdRef.current = selectedSpreadsheetId;
   const hasAutoPickedPeriodRef = useRef<boolean>(false);
-
-  useEffect(() => {
-    const unsubscribe = initAuth(
-      (authedUser, token) => {
-        setUser(authedUser);
-        setAvatarFailed(false);
-        setAccessToken(token);
-        setNeedsAuth(false);
-        setAuthReady(true);
-      },
-      (existingUser, errorMsg) => {
-        setUser(existingUser);
-        setAvatarFailed(false);
-        setAccessToken(null);
-        setNeedsAuth(true);
-        setAuthReady(true);
-        if (errorMsg) {
-          setAuthError(errorMsg);
-        }
-      }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogin = async () => {
-    setIsLoggingIn(true);
-    setAuthError(null);
-    try {
-      const result = await googleSignIn();
-      setUser(result.user);
-      setAvatarFailed(false);
-      setAccessToken(result.accessToken);
-      setNeedsAuth(false);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível concluir o login com o Google.';
-      setAuthError(msg);
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleSwitchAccount = async () => {
-    setAuthError(null);
-    setIsLoggingIn(true);
-    try {
-      const result = await googleSignIn();
-      setUser(result.user);
-      setAvatarFailed(false);
-      setAccessToken(result.accessToken);
-      setNeedsAuth(false);
-      setSelectedSpreadsheetId(null);
-      setActiveSheetTitle('');
-      setExplicitHeaderRow(undefined);
-      setMetadata(null);
-      setDataset(null);
-      setRawValues(null);
-      setCustomMapping(null);
-      setLoadError(null);
-      setSyncDiff(null);
-      setSelectedSite(null);
-      setSelectedPage(null);
-      setSelectedHour(null);
-      setShowPickerModal(false);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível trocar de conta Google.';
-      setAuthError(msg);
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
 
   const handleAuthExpired = useCallback(() => {
     clearCachedToken();
     setAccessToken(null);
-    setNeedsAuth(true);
+    setIsSyncing(false);
+    setIsInitialLoading(false);
+    if (userRef.current && datasetRef.current) {
+      // Keep the user logged in on the dashboard instead of kicking them out
+      setTokenNeedsRenewal(true);
+      setNeedsAuth(false);
+    } else {
+      setNeedsAuth(true);
+    }
   }, []);
-
-  const handleLogout = async () => {
-    await logout();
-    setUser(null);
-    setAccessToken(null);
-    setNeedsAuth(true);
-    setSelectedSpreadsheetId(null);
-    setMetadata(null);
-    setDataset(null);
-    setRawValues(null);
-    setCustomMapping(null);
-  };
 
   const fetchSheetData = useCallback(
     async (
       spreadsheetId: string,
       targetSheetTitle?: string,
       headerOverride?: number,
-      isBackgroundSync = false
+      isBackgroundSync = false,
+      tokenOverride?: string
     ) => {
-      const token = accessToken || getAccessToken();
+      const token = tokenOverride || accessToken || getAccessToken();
       if (!token) {
         handleAuthExpired();
         return;
@@ -297,6 +270,9 @@ export default function App() {
 
         setActiveSheetTitle(resolvedTab);
         setRawValues(values);
+        setTokenNeedsRenewal(false);
+        setRenewalError(null);
+        saveLastSheetSelection(userRef.current?.uid, spreadsheetId, resolvedTab);
 
         const parsed = buildParsedDataset(
           meta,
@@ -330,6 +306,196 @@ export default function App() {
     },
     [accessToken, handleAuthExpired]
   );
+
+  const restoreOrFetchSavedSheet = useCallback(
+    (uid: string, token: string) => {
+      if (selectedSpreadsheetIdRef.current) return;
+      const saved = loadLastSheetSelection(uid);
+      if (saved) {
+        setSelectedSpreadsheetId(saved.spreadsheetId);
+        fetchSheetData(
+          saved.spreadsheetId,
+          saved.sheetTitle,
+          undefined,
+          false,
+          token
+        );
+      }
+    },
+    [fetchSheetData]
+  );
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (authedUser, token) => {
+        setUser(authedUser);
+        setAvatarFailed(false);
+        setAccessToken(token);
+        setNeedsAuth(false);
+        setTokenNeedsRenewal(false);
+        setRenewalError(null);
+        setAuthReady(true);
+        restoreOrFetchSavedSheet(authedUser.uid, token);
+      },
+      (existingUser, errorMsg) => {
+        setUser(existingUser);
+        setAvatarFailed(false);
+        setAccessToken(null);
+        if (existingUser && datasetRef.current) {
+          setTokenNeedsRenewal(true);
+          setNeedsAuth(false);
+        } else {
+          setNeedsAuth(true);
+        }
+        setAuthReady(true);
+        if (errorMsg) {
+          setAuthError(errorMsg);
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, [restoreOrFetchSavedSheet]);
+
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+    try {
+      const result = await googleSignIn();
+      setUser(result.user);
+      setAvatarFailed(false);
+      setAccessToken(result.accessToken);
+      setNeedsAuth(false);
+      setTokenNeedsRenewal(false);
+      setRenewalError(null);
+      restoreOrFetchSavedSheet(result.user.uid, result.accessToken);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível concluir o login com o Google.';
+      setAuthError(msg);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleContinueExisting = async () => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+    try {
+      const result = await googleContinueSession(user?.email);
+      setUser(result.user);
+      setAvatarFailed(false);
+      setAccessToken(result.accessToken);
+      setNeedsAuth(false);
+      setTokenNeedsRenewal(false);
+      setRenewalError(null);
+      restoreOrFetchSavedSheet(result.user.uid, result.accessToken);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível retomar a conexão com o Google.';
+      setAuthError(msg);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleRenewToken = async (openPickerAfter = false) => {
+    setIsRenewingToken(true);
+    setRenewalError(null);
+    try {
+      const result = await googleContinueSession(user?.email);
+      setUser(result.user);
+      setAvatarFailed(false);
+      setAccessToken(result.accessToken);
+      setTokenNeedsRenewal(false);
+      setNeedsAuth(false);
+      if (openPickerAfter) {
+        setShowPickerModal(true);
+      } else if (selectedSpreadsheetId) {
+        fetchSheetData(
+          selectedSpreadsheetId,
+          activeSheetTitle || undefined,
+          explicitHeaderRow,
+          true,
+          result.accessToken
+        );
+      }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível renovar a sincronização agora.';
+      setRenewalError(msg);
+    } finally {
+      setIsRenewingToken(false);
+    }
+  };
+
+  const handleOpenPickerModal = () => {
+    if (!accessToken || tokenNeedsRenewal) {
+      handleRenewToken(true);
+      return;
+    }
+    setShowPickerModal(true);
+  };
+
+  const handleSwitchAccount = async () => {
+    setAuthError(null);
+    setRenewalError(null);
+    setIsLoggingIn(true);
+    try {
+      const previousUid = user?.uid;
+      const result = await googleSignIn();
+      if (previousUid && previousUid !== result.user.uid) {
+        clearLastSheetSelection(previousUid);
+      }
+      setUser(result.user);
+      setAvatarFailed(false);
+      setAccessToken(result.accessToken);
+      setNeedsAuth(false);
+      setTokenNeedsRenewal(false);
+      setSelectedSpreadsheetId(null);
+      setActiveSheetTitle('');
+      setExplicitHeaderRow(undefined);
+      setMetadata(null);
+      setDataset(null);
+      setRawValues(null);
+      setCustomMapping(null);
+      setLoadError(null);
+      setSyncDiff(null);
+      setSelectedSite(null);
+      setSelectedPage(null);
+      setSelectedHour(null);
+      setShowPickerModal(false);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível trocar de conta Google.';
+      setAuthError(msg);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    clearLastSheetSelection(user?.uid);
+    await logout();
+    setUser(null);
+    setAccessToken(null);
+    setNeedsAuth(true);
+    setTokenNeedsRenewal(false);
+    setRenewalError(null);
+    setSelectedSpreadsheetId(null);
+    setActiveSheetTitle('');
+    setMetadata(null);
+    setDataset(null);
+    setRawValues(null);
+    setCustomMapping(null);
+  };
 
   const loadSavedMapping = (spreadsheetId: string, sheetTitle: string) => {
     try {
@@ -387,6 +553,7 @@ export default function App() {
   useEffect(() => {
     if (
       needsAuth ||
+      tokenNeedsRenewal ||
       !accessToken ||
       !selectedSpreadsheetId ||
       !activeSheetTitle ||
@@ -424,6 +591,7 @@ export default function App() {
     };
   }, [
     needsAuth,
+    tokenNeedsRenewal,
     accessToken,
     selectedSpreadsheetId,
     activeSheetTitle,
@@ -754,6 +922,8 @@ export default function App() {
     return (
       <AuthGate
         onLogin={handleLogin}
+        onContinueExisting={handleContinueExisting}
+        onLogout={handleLogout}
         isLoggingIn={isLoggingIn}
         errorMessage={authError}
         existingUser={user}
@@ -892,8 +1062,8 @@ export default function App() {
         <button
           type="button"
           onClick={() => {
-            setShowPickerModal(true);
             setMobileMenuOpen(false);
+            handleOpenPickerModal();
           }}
           className="w-full px-3.5 py-2.5 rounded-2xl text-xs font-bold text-[#3F5149] hover:bg-[#FCF7EE]/45 flex items-center gap-2.5 cursor-pointer transition-colors"
         >
@@ -1033,24 +1203,68 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={() =>
-                  fetchSheetData(
-                    selectedSpreadsheetId,
-                    activeSheetTitle,
-                    explicitHeaderRow,
-                    true
-                  )
-                }
-                disabled={isSyncing}
+                onClick={() => {
+                  if (tokenNeedsRenewal || !accessToken) {
+                    handleRenewToken();
+                  } else {
+                    fetchSheetData(
+                      selectedSpreadsheetId,
+                      activeSheetTitle,
+                      explicitHeaderRow,
+                      true
+                    );
+                  }
+                }}
+                disabled={isSyncing || isRenewingToken}
                 className="px-5 py-2.5 text-xs font-bold text-white clay-coral-btn rounded-2xl transition-transform active:scale-[0.98] whitespace-nowrap shrink-0 inline-flex items-center gap-2 cursor-pointer"
               >
                 <RefreshCw
-                  className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`}
+                  className={`w-3.5 h-3.5 ${
+                    isSyncing || isRenewingToken ? 'animate-spin' : ''
+                  }`}
                 />
-                <span>Atualizar</span>
+                <span>
+                  {tokenNeedsRenewal ? 'Renovar e atualizar' : 'Atualizar'}
+                </span>
               </button>
             </div>
           </header>
+
+          {tokenNeedsRenewal && (
+            <div
+              role="status"
+              className="clay-butter rounded-[24px] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
+              <div className="space-y-1">
+                <p className="text-xs sm:text-sm font-bold text-[#2C221E]">
+                  Você continua logado como {user?.email || userFirstName}.
+                </p>
+                <p className="text-xs text-[#695A42]">
+                  O Google encerra cada leitura automática após 1 hora. Seus dados continuam abertos aqui — clique ao lado para retomar a sincronização em 1 clique.
+                </p>
+                {renewalError && (
+                  <p className="text-xs font-semibold text-[#8F2D22] pt-0.5">
+                    {renewalError}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRenewToken(false)}
+                disabled={isRenewingToken}
+                className="px-4 py-2.5 text-xs font-bold rounded-2xl clay-coral-btn text-white whitespace-nowrap shrink-0 inline-flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${isRenewingToken ? 'animate-spin' : ''}`}
+                />
+                <span>
+                  {isRenewingToken
+                    ? 'Renovando...'
+                    : 'Renovar sincronização'}
+                </span>
+              </button>
+            </div>
+          )}
 
           {loadError ? (
             <div className="clay-card rounded-[28px] p-8 text-center max-w-2xl mx-auto my-8">
@@ -1075,7 +1289,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowPickerModal(true)}
+                  onClick={handleOpenPickerModal}
                   className="px-5 py-2.5 text-xs font-bold clay-button-active text-[#2C221E] rounded-2xl cursor-pointer"
                 >
                   Escolher outra planilha
@@ -1113,7 +1327,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowPickerModal(true)}
+                  onClick={handleOpenPickerModal}
                   className="px-5 py-2.5 text-xs font-bold rounded-2xl clay-button-active text-[#2C221E] cursor-pointer"
                 >
                   Trocar planilha
@@ -1148,6 +1362,14 @@ export default function App() {
                       <span>
                         Atualizado às {formatSyncTime(dataset.syncedAt)}
                       </span>
+                      {tokenNeedsRenewal && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-[#9E5E12] font-bold">
+                            Sincronização pausada (clique em Renovar)
+                          </span>
+                        </>
+                      )}
                       {syncDiff && (
                         <>
                           <span aria-hidden="true">·</span>
