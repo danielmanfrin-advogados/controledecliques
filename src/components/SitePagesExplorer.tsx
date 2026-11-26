@@ -10,6 +10,7 @@ interface SitePagesExplorerProps {
   selectedPage: string | null;
   onSelectSite: (site: string | null) => void;
   onSelectPage: (page: string | null) => void;
+  hasUserCol?: boolean;
 }
 
 export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
@@ -20,6 +21,7 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
   selectedPage,
   onSelectSite,
   onSelectPage,
+  hasUserCol = false,
 }) => {
   const maxSiteClicks = Math.max(1, ...sites.map((s) => s.clicks));
   const maxPageClicks = Math.max(1, ...pages.map((p) => p.clicks));
@@ -115,8 +117,10 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
                   <div className="flex items-center justify-between text-xs text-[#6E5F54] tabular-nums">
                     <span>
                       {site.uniquePages}{' '}
-                      {site.uniquePages === 1 ? 'página' : 'páginas'} ·{' '}
-                      {site.sharePct.toFixed(0)}%
+                      {site.uniquePages === 1 ? 'página' : 'páginas'}
+                      {hasUserCol
+                        ? ` · ${site.newUsers.toLocaleString('pt-BR')} novos`
+                        : ` · ${site.sharePct.toFixed(0)}%`}
                     </span>
                     <span>
                       {site.lastTimeFormatted !== '—'

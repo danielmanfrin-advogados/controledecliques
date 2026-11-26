@@ -14,7 +14,9 @@ import {
   Search,
   SlidersHorizontal,
   Table2,
+  UserPlus,
   UserRoundCog,
+  Users,
   X,
 } from 'lucide-react';
 import {
@@ -44,6 +46,7 @@ import {
   aggregateBySite,
   aggregatePages,
   aggregateTimelineForPeriod,
+  analyzeUsers,
   buildClickEvents,
   buildParsedDataset,
   computeDatasetDiff,
@@ -58,16 +61,18 @@ import { ClickKpiStrip } from './components/ClickKpiStrip';
 import { SitePagesExplorer } from './components/SitePagesExplorer';
 import { HourlyAndTimelineSection } from './components/HourlyAndTimelineSection';
 import { HourlyRecordsPanel } from './components/HourlyRecordsPanel';
+import { UsersAnalyticsPanel } from './components/UsersAnalyticsPanel';
 import { ClickLogTable } from './components/ClickLogTable';
 import { RawSheetTable } from './components/RawSheetTable';
 import { ColumnMappingModal } from './components/ColumnMappingModal';
 import { RowDetailDrawer } from './components/RowDetailDrawer';
 
-type NavSection = 'overview' | 'sites' | 'hours' | 'logs' | 'raw';
+type NavSection = 'overview' | 'sites' | 'users' | 'hours' | 'logs' | 'raw';
 
 const SECTION_META: Record<NavSection, { title: string }> = {
   overview: { title: 'Dashboard' },
   sites: { title: 'Sites e Páginas' },
+  users: { title: 'Usuários Novos e Cliques' },
   hours: { title: 'Horários de Pico' },
   logs: { title: 'Histórico de Cliques' },
   raw: { title: 'Planilha Completa' },
@@ -435,10 +440,32 @@ export default function App() {
         dateCol: null,
         timeCol: null,
         clicksCol: null,
+        userCol: null,
+        newUserCol: null,
+        nameCol: null,
+        cityCol: null,
+        deviceCol: null,
       };
     }
-    if (customMapping) return customMapping;
-    return inferClickColumnMapping(dataset.columns, dataset.rows);
+    const inferred = inferClickColumnMapping(dataset.columns, dataset.rows);
+    if (!customMapping) return inferred;
+    return {
+      ...customMapping,
+      userCol:
+        'userCol' in customMapping ? customMapping.userCol ?? null : inferred.userCol ?? null,
+      newUserCol:
+        'newUserCol' in customMapping
+          ? customMapping.newUserCol ?? null
+          : inferred.newUserCol ?? null,
+      nameCol:
+        'nameCol' in customMapping ? customMapping.nameCol ?? null : inferred.nameCol ?? null,
+      cityCol:
+        'cityCol' in customMapping ? customMapping.cityCol ?? null : inferred.cityCol ?? null,
+      deviceCol:
+        'deviceCol' in customMapping
+          ? customMapping.deviceCol ?? null
+          : inferred.deviceCol ?? null,
+    };
   }, [dataset, customMapping]);
 
   const allClickEvents = useMemo(() => {
@@ -524,14 +551,43 @@ export default function App() {
     return periodEvents.filter((ev) => ev.hourOfDay === selectedHour);
   }, [periodEvents, selectedHour]);
 
+  const usersSummary = useMemo(
+    () =>
+      analyzeUsers(allClickEvents, eventsWithHourFilter, {
+        period,
+        referenceDate,
+        customStart,
+        customEnd,
+        hasUserCol: Boolean(effectiveMapping.userCol || effectiveMapping.nameCol),
+      }),
+    [
+      allClickEvents,
+      eventsWithHourFilter,
+      period,
+      referenceDate,
+      customStart,
+      customEnd,
+      effectiveMapping.userCol,
+      effectiveMapping.nameCol,
+    ]
+  );
+
+  const newUsersBySiteMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of usersSummary.bySite) {
+      m.set(s.site, s.newUsers);
+    }
+    return m;
+  }, [usersSummary.bySite]);
+
   const sitesAgg = useMemo(
-    () => aggregateBySite(eventsWithHourFilter),
-    [eventsWithHourFilter]
+    () => aggregateBySite(eventsWithHourFilter, newUsersBySiteMap),
+    [eventsWithHourFilter, newUsersBySiteMap]
   );
 
   const scopedSitesAgg = useMemo(
-    () => aggregateBySite(scopedEvents),
-    [scopedEvents]
+    () => aggregateBySite(scopedEvents, newUsersBySiteMap),
+    [scopedEvents, newUsersBySiteMap]
   );
 
   const pagesAgg = useMemo(
@@ -659,6 +715,12 @@ export default function App() {
       label: 'Sites e Páginas',
       icon: <Globe className="w-4 h-4" />,
       iconColor: 'text-[#E36A42]',
+    },
+    {
+      id: 'users',
+      label: 'Usuários',
+      icon: <Users className="w-4 h-4" />,
+      iconColor: 'text-[#366B62]',
     },
     {
       id: 'hours',
@@ -1189,6 +1251,51 @@ export default function App() {
                     periodLabel={periodLabel}
                   />
 
+                  {usersSummary.hasUserCol && (
+                    <section
+                      aria-label="Resumo de usuários novos"
+                      className="clay-card rounded-[24px] px-5 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-2xl bg-[#4C8F84] text-white flex items-center justify-center shrink-0 clay-icon-tile">
+                          <UserPlus className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-extrabold text-[#2C221E] tabular-nums">
+                            {usersSummary.totalNewUsers.toLocaleString('pt-BR')}{' '}
+                            {usersSummary.totalNewUsers === 1
+                              ? 'usuário novo clicou'
+                              : 'usuários novos clicaram'}{' '}
+                            <span className="text-[#6E5F54] font-semibold text-xs">
+                              ({usersSummary.newUserClicks.toLocaleString('pt-BR')} cliques ·{' '}
+                              {usersSummary.totalUniqueUsers.toLocaleString('pt-BR')} únicos no período)
+                            </span>
+                          </p>
+                          {usersSummary.bySite.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
+                              {usersSummary.bySite.slice(0, 4).map((s) => (
+                                <span
+                                  key={s.site}
+                                  className="px-2.5 py-0.5 rounded-lg bg-[#EFE6D8] font-semibold text-[#3D3028] tabular-nums"
+                                >
+                                  {s.site}: {s.newUsers.toLocaleString('pt-BR')} novos
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection('users')}
+                        className="px-4 py-2 text-xs font-bold rounded-2xl clay-button-active text-[#366B62] hover:text-[#E36A42] cursor-pointer whitespace-nowrap self-start lg:self-auto shrink-0"
+                      >
+                        Ver usuários, cliques e dias →
+                      </button>
+                    </section>
+                  )}
+
                   <SitePagesExplorer
                     sites={sitesAgg}
                     pages={pagesAgg}
@@ -1197,6 +1304,7 @@ export default function App() {
                     selectedPage={selectedPage}
                     onSelectSite={(s) => setSelectedSite(s)}
                     onSelectPage={(p) => setSelectedPage(p)}
+                    hasUserCol={usersSummary.hasUserCol}
                   />
 
                   <HourlyAndTimelineSection
@@ -1221,6 +1329,19 @@ export default function App() {
                   selectedPage={selectedPage}
                   onSelectSite={(s) => setSelectedSite(s)}
                   onSelectPage={(p) => setSelectedPage(p)}
+                  hasUserCol={usersSummary.hasUserCol}
+                />
+              )}
+
+              {activeSection === 'users' && (
+                <UsersAnalyticsPanel
+                  summary={usersSummary}
+                  siteColorIndexMap={siteColorIndexMap}
+                  selectedSite={selectedSite}
+                  onSelectSite={(s) => setSelectedSite(s)}
+                  periodLabel={periodLabel}
+                  onOpenMapping={() => setShowMappingModal(true)}
+                  onInspectRow={setInspectedRow}
                 />
               )}
 

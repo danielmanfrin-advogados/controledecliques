@@ -19,7 +19,15 @@ interface ClickLogTableProps {
   onInspectRow: (row: ParsedRow) => void;
 }
 
-type SortField = 'date' | 'time' | 'site' | 'page' | 'clicks';
+type SortField =
+  | 'date'
+  | 'time'
+  | 'name'
+  | 'city'
+  | 'device'
+  | 'site'
+  | 'page'
+  | 'clicks';
 type SortDir = 'asc' | 'desc';
 
 export const ClickLogTable: React.FC<ClickLogTableProps> = ({
@@ -38,6 +46,23 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
     setPage(1);
   }, [events.length]);
 
+  const { hasName, hasCity, hasDevice } = useMemo(() => {
+    let nameFound = false;
+    let cityFound = false;
+    let deviceFound = false;
+    for (const ev of events) {
+      if (ev.userName || ev.userId) nameFound = true;
+      if (ev.city) cityFound = true;
+      if (ev.device) deviceFound = true;
+      if (nameFound && cityFound && deviceFound) break;
+    }
+    return {
+      hasName: nameFound,
+      hasCity: cityFound,
+      hasDevice: deviceFound,
+    };
+  }, [events]);
+
   const sortedEvents = useMemo(() => {
     const copy = [...events];
     copy.sort((a, b) => {
@@ -48,6 +73,20 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
         cmp = tsA - tsB;
       } else if (sortField === 'time') {
         cmp = a.timeFormatted.localeCompare(b.timeFormatted);
+      } else if (sortField === 'name') {
+        cmp = (a.userName ?? a.userId ?? '').localeCompare(
+          b.userName ?? b.userId ?? '',
+          'pt-BR',
+          { sensitivity: 'base' }
+        );
+      } else if (sortField === 'city') {
+        cmp = (a.city ?? '').localeCompare(b.city ?? '', 'pt-BR', {
+          sensitivity: 'base',
+        });
+      } else if (sortField === 'device') {
+        cmp = (a.device ?? '').localeCompare(b.device ?? '', 'pt-BR', {
+          sensitivity: 'base',
+        });
       } else if (sortField === 'site') {
         cmp = a.site.localeCompare(b.site, 'pt-BR', { sensitivity: 'base' });
       } else if (sortField === 'page') {
@@ -129,7 +168,7 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
           Nenhum clique encontrado para os filtros atuais.
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto clay-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-[#EADFD1] bg-[#FAF4EA] text-xs font-bold text-[#5E4E42]">
@@ -153,6 +192,42 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
                     {renderSortIcon('time')}
                   </button>
                 </th>
+                {hasName && (
+                  <th className="py-3.5 px-5 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('name')}
+                      className="inline-flex items-center gap-1 cursor-pointer hover:text-[#2C221E]"
+                    >
+                      <span>Nome / Usuário</span>
+                      {renderSortIcon('name')}
+                    </button>
+                  </th>
+                )}
+                {hasCity && (
+                  <th className="py-3.5 px-5 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('city')}
+                      className="inline-flex items-center gap-1 cursor-pointer hover:text-[#2C221E]"
+                    >
+                      <span>Cidade</span>
+                      {renderSortIcon('city')}
+                    </button>
+                  </th>
+                )}
+                {hasDevice && (
+                  <th className="py-3.5 px-5 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSort('device')}
+                      className="inline-flex items-center gap-1 cursor-pointer hover:text-[#2C221E]"
+                    >
+                      <span>Aparelho</span>
+                      {renderSortIcon('device')}
+                    </button>
+                  </th>
+                )}
                 <th className="py-3.5 px-5 whitespace-nowrap">
                   <button
                     type="button"
@@ -189,6 +264,7 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
               {pagedEvents.map((ev) => {
                 const colorIdx = siteColorIndexMap.get(ev.site) ?? 0;
                 const theme = getSiteColorTheme(colorIdx);
+                const displayName = ev.userName ?? ev.userId;
                 return (
                   <tr
                     key={ev.rowIndex}
@@ -201,13 +277,37 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
                     <td className="py-3.5 px-5 font-mono tabular-nums text-[#2C221E] font-medium whitespace-nowrap">
                       {ev.timeFormatted}
                     </td>
+                    {hasName && (
+                      <td
+                        className="py-3.5 px-5 font-semibold text-[#2C221E] max-w-[180px] truncate"
+                        title={displayName ?? ''}
+                      >
+                        {displayName ?? <span className="text-[#C7B8A6]">—</span>}
+                      </td>
+                    )}
+                    {hasCity && (
+                      <td
+                        className="py-3.5 px-5 text-[#4A3B31] max-w-[150px] truncate"
+                        title={ev.city ?? ''}
+                      >
+                        {ev.city ?? <span className="text-[#C7B8A6]">—</span>}
+                      </td>
+                    )}
+                    {hasDevice && (
+                      <td
+                        className="py-3.5 px-5 text-[#4A3B31] max-w-[150px] truncate"
+                        title={ev.device ?? ''}
+                      >
+                        {ev.device ?? <span className="text-[#C7B8A6]">—</span>}
+                      </td>
+                    )}
                     <td
-                      className={`py-3.5 px-5 font-bold max-w-[220px] truncate ${theme.textClass}`}
+                      className={`py-3.5 px-5 font-bold max-w-[200px] truncate ${theme.textClass}`}
                     >
                       {ev.site}
                     </td>
                     <td
-                      className="py-3.5 px-5 font-mono text-[#4A3B31] max-w-[380px] truncate"
+                      className="py-3.5 px-5 font-mono text-[#4A3B31] max-w-[340px] truncate"
                       title={ev.page}
                     >
                       {ev.page}

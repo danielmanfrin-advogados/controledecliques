@@ -10,9 +10,14 @@ import {
   ParsedSheetDataset,
   PeriodPreset,
   SiteAggregate,
+  SiteUsersAggregate,
   SpreadsheetMetadata,
   SyncDiffSummary,
   TimelineBucket,
+  UserAggregate,
+  UserDaySummary,
+  UserSiteSummary,
+  UsersAnalyticsSummary,
 } from '../types/sheets';
 import { SheetRawValues } from '../services/googleSheetsApi';
 
@@ -735,6 +740,146 @@ export function inferClickColumnMapping(
     }
   }
 
+  // 5b. Device / City / Name (detect before user fallback so Aparelho/Cidade/Nome are separated cleanly)
+  const findByWordToken = (tokens: string[], excludeKeys: Set<string>) => {
+    for (const token of tokens) {
+      const re = new RegExp(`(^|[\\s_\\-/])${token}($|[\\s_\\-/])`);
+      const match = columns.find(
+        (c) => !excludeKeys.has(c.key) && re.test(normalizeLabel(c.label))
+      );
+      if (match) return match.key;
+    }
+    return null;
+  };
+
+  let deviceCol = findByKeywords(
+    [
+      'aparelho',
+      'dispositivo',
+      'device',
+      'celular',
+      'smartphone',
+      'mobile',
+      'plataforma',
+      'sistema',
+      'navegador',
+      'browser',
+      'user_agent',
+      'useragent',
+      'modelo',
+    ],
+    used
+  );
+  if (!deviceCol) {
+    deviceCol = findByWordToken(['os'], used);
+  }
+  if (deviceCol) used.add(deviceCol);
+
+  let cityCol = findByKeywords(
+    [
+      'cidade',
+      'city',
+      'municipio',
+      'localidade',
+      'regiao',
+      'origem_cidade',
+      'bairro',
+    ],
+    used
+  );
+  if (!cityCol) {
+    cityCol = findByWordToken(['local', 'estado', 'uf'], used);
+  }
+  if (cityCol) used.add(cityCol);
+
+  let nameCol = findByKeywords(
+    ['nome_completo', 'nome_usuario', 'nome_cliente', 'pessoa', 'autor'],
+    used
+  );
+  if (!nameCol) {
+    nameCol = findByWordToken(['nome', 'name'], used);
+  }
+  if (nameCol) used.add(nameCol);
+
+  // 5c. User / Visitor / IP identifier (detect before generic site/page fallbacks)
+  let userCol = findByKeywords(
+    [
+      'usuario',
+      'user_id',
+      'userid',
+      'id_usuario',
+      'visitante',
+      'visitor',
+      'cliente',
+      'client_id',
+      'email',
+      'e-mail',
+      'sessao',
+      'session',
+      'fingerprint',
+      'cookie',
+      'identificador',
+      'whatsapp',
+      'telefone',
+      'lead',
+      'endereco_ip',
+      'ip_address',
+    ],
+    used
+  );
+  if (!userCol) {
+    userCol = findByWordToken(['user', 'uid', 'ip', 'contato', 'id'], used);
+  }
+  if (!userCol) {
+    const patternCol = columns.find((c) => {
+      if (
+        used.has(c.key) ||
+        c.type === 'date' ||
+        c.type === 'currency' ||
+        c.type === 'percent'
+      ) {
+        return false;
+      }
+      const samples = rows
+        .slice(0, 15)
+        .map((r) => (r.cells[c.key]?.formatted ?? '').trim())
+        .filter(Boolean);
+      if (samples.length === 0) return false;
+      const hits = samples.filter(
+        (v) =>
+          /^(\d{1,3}\.){3}\d{1,3}$/.test(v) ||
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+      ).length;
+      return hits >= Math.ceil(samples.length * 0.6);
+    });
+    if (patternCol) userCol = patternCol.key;
+  }
+  // If sheet only has Nome (and no separate ID/IP), use Nome as user identifier too
+  if (!userCol && nameCol) {
+    userCol = nameCol;
+  }
+  if (userCol) used.add(userCol);
+
+  // 5d. Explicit New User indicator column (optional)
+  let newUserCol = findByKeywords(
+    [
+      'novo_usuario',
+      'usuario_novo',
+      'new_user',
+      'is_new',
+      'primeira_vez',
+      'first_visit',
+      'tipo_usuario',
+      'tipo_visitante',
+      'recorrente',
+    ],
+    used
+  );
+  if (!newUserCol) {
+    newUserCol = findByWordToken(['novo', 'nova', 'new'], used);
+  }
+  if (newUserCol) used.add(newUserCol);
+
   // Fallback for page if still missing
   if (!pageCol) {
     const urlLikeCol = columns.find((c) => {
@@ -783,6 +928,11 @@ export function inferClickColumnMapping(
     dateCol,
     timeCol,
     clicksCol,
+    userCol,
+    newUserCol,
+    nameCol,
+    cityCol,
+    deviceCol,
   };
 }
 
@@ -878,6 +1028,53 @@ export function buildClickEvents(
       }
     }
 
+    const cleanOptionalCell = (colKey?: string | null): string | null => {
+      if (!colKey) return null;
+      const val = (row.cells[colKey]?.formatted ?? '').trim();
+      if (!val || val === '-' || val === '—') return null;
+      return val;
+    };
+
+    const userName = cleanOptionalCell(mapping.nameCol);
+    const city = cleanOptionalCell(mapping.cityCol);
+    const device = cleanOptionalCell(mapping.deviceCol);
+    const userId = cleanOptionalCell(mapping.userCol) ?? userName;
+
+    let isNewUserFlag: boolean | null = null;
+    if (mapping.newUserCol) {
+      const flagVal = normalizeLabel(
+        row.cells[mapping.newUserCol]?.formatted ?? ''
+      );
+      if (
+        flagVal === 'sim' ||
+        flagVal === 's' ||
+        flagVal === 'yes' ||
+        flagVal === 'true' ||
+        flagVal === '1' ||
+        flagVal === 'novo' ||
+        flagVal === 'nova' ||
+        flagVal === 'new' ||
+        flagVal.includes('novo') ||
+        flagVal.includes('primeira') ||
+        flagVal.includes('1a vez')
+      ) {
+        isNewUserFlag = true;
+      } else if (
+        flagVal === 'nao' ||
+        flagVal === 'n' ||
+        flagVal === 'no' ||
+        flagVal === 'false' ||
+        flagVal === '0' ||
+        flagVal.includes('recorrente') ||
+        flagVal.includes('returning') ||
+        flagVal.includes('antigo') ||
+        flagVal.includes('existente') ||
+        flagVal.includes('retorno')
+      ) {
+        isNewUserFlag = false;
+      }
+    }
+
     return {
       rowIndex: row.rowIndex,
       site,
@@ -888,6 +1085,11 @@ export function buildClickEvents(
       hourOfDay,
       timestamp,
       clicks,
+      userId,
+      userName,
+      city,
+      device,
+      isNewUserFlag,
       rawRow: row,
     };
   });
@@ -1002,7 +1204,7 @@ export function filterClickEvents(
 
     if (searchLower) {
       const hay =
-        `${ev.site} ${ev.page} ${ev.dateFormatted} ${ev.timeFormatted}`.toLowerCase();
+        `${ev.site} ${ev.page} ${ev.dateFormatted} ${ev.timeFormatted} ${ev.userName ?? ''} ${ev.userId ?? ''} ${ev.city ?? ''} ${ev.device ?? ''}`.toLowerCase();
       if (!hay.includes(searchLower)) return false;
     }
 
@@ -1022,13 +1224,17 @@ function getPeakHour(hourCounts: Map<number, number>): number | null {
   return bestHour;
 }
 
-export function aggregateBySite(events: ClickEventRecord[]): SiteAggregate[] {
+export function aggregateBySite(
+  events: ClickEventRecord[],
+  newUsersBySiteMap?: Map<string, number>
+): SiteAggregate[] {
   const totalClicks = events.reduce((acc, e) => acc + e.clicks, 0);
   const map = new Map<
     string,
     {
       clicks: number;
       pages: Set<string>;
+      users: Set<string>;
       lastTs: number;
       lastDate: string;
       lastTime: string;
@@ -1042,6 +1248,7 @@ export function aggregateBySite(events: ClickEventRecord[]): SiteAggregate[] {
       entry = {
         clicks: 0,
         pages: new Set(),
+        users: new Set(),
         lastTs: -1,
         lastDate: ev.dateFormatted,
         lastTime: ev.timeFormatted,
@@ -1052,6 +1259,9 @@ export function aggregateBySite(events: ClickEventRecord[]): SiteAggregate[] {
 
     entry.clicks += ev.clicks;
     entry.pages.add(ev.page);
+    if (ev.userId) {
+      entry.users.add(ev.userId);
+    }
 
     if (ev.hourOfDay !== null) {
       entry.hours.set(
@@ -1074,6 +1284,8 @@ export function aggregateBySite(events: ClickEventRecord[]): SiteAggregate[] {
       clicks: d.clicks,
       sharePct: totalClicks > 0 ? (d.clicks / totalClicks) * 100 : 0,
       uniquePages: d.pages.size,
+      uniqueUsers: d.users.size,
+      newUsers: newUsersBySiteMap?.get(site) ?? 0,
       lastDateFormatted: d.lastDate,
       lastTimeFormatted: d.lastTime,
       peakHour: getPeakHour(d.hours),
@@ -1146,6 +1358,336 @@ export function aggregatePages(
       peakHour: getPeakHour(d.hours),
     }))
     .sort((a, b) => b.clicks - a.clicks);
+}
+
+function compareEventOrder(a: ClickEventRecord, b: ClickEventRecord): number {
+  if (a.isoDate && b.isoDate && a.isoDate !== b.isoDate) {
+    return a.isoDate.localeCompare(b.isoDate);
+  }
+  if (a.timestamp !== null && b.timestamp !== null && a.timestamp !== b.timestamp) {
+    return a.timestamp - b.timestamp;
+  }
+  return a.rowIndex - b.rowIndex;
+}
+
+export function analyzeUsers(
+  allEvents: ClickEventRecord[],
+  periodEvents: ClickEventRecord[],
+  options: {
+    period: PeriodPreset;
+    referenceDate: Date;
+    customStart?: string;
+    customEnd?: string;
+    hasUserCol: boolean;
+  }
+): UsersAnalyticsSummary {
+  if (!options.hasUserCol) {
+    return {
+      hasUserCol: false,
+      totalNewUsers: 0,
+      totalUniqueUsers: 0,
+      totalReturningUsers: 0,
+      newUserClicks: 0,
+      totalIdentifiedClicks: 0,
+      unidentifiedEventsCount: periodEvents.length,
+      bySite: [],
+      users: [],
+    };
+  }
+
+  let startIso: string | null = null;
+  let endIso: string | null = null;
+  if (options.period === 'custom') {
+    startIso = options.customStart || null;
+    endIso = options.customEnd || null;
+  } else if (options.period !== 'all') {
+    const bounds = getPeriodBounds(options.period, options.referenceDate);
+    startIso = bounds.startIso;
+    endIso = bounds.endIso;
+  }
+
+  const hasWindowBounds = Boolean(startIso || endIso);
+  const isInWindow = (isoDate: string | null): boolean => {
+    if (!hasWindowBounds) return true;
+    if (!isoDate) return false;
+    if (startIso && isoDate < startIso) return false;
+    if (endIso && isoDate > endIso) return false;
+    return true;
+  };
+
+  interface HistoricUserInfo {
+    totalClicks: number;
+    days: Set<string>;
+    firstEvent: ClickEventRecord;
+    firstBySite: Map<string, ClickEventRecord>;
+  }
+
+  const historicMap = new Map<string, HistoricUserInfo>();
+  for (const ev of allEvents) {
+    if (!ev.userId) continue;
+    const dayKey = ev.isoDate ?? (ev.dateFormatted !== '—' ? ev.dateFormatted : `row_${ev.rowIndex}`);
+    let info = historicMap.get(ev.userId);
+    if (!info) {
+      info = {
+        totalClicks: 0,
+        days: new Set(),
+        firstEvent: ev,
+        firstBySite: new Map([[ev.site, ev]]),
+      };
+      historicMap.set(ev.userId, info);
+    } else {
+      if (compareEventOrder(ev, info.firstEvent) < 0) {
+        info.firstEvent = ev;
+      }
+      const prevSiteFirst = info.firstBySite.get(ev.site);
+      if (!prevSiteFirst || compareEventOrder(ev, prevSiteFirst) < 0) {
+        info.firstBySite.set(ev.site, ev);
+      }
+    }
+    info.totalClicks += ev.clicks;
+    info.days.add(dayKey);
+  }
+
+  interface PeriodUserAcc {
+    userId: string;
+    userName: string | null;
+    cities: Set<string>;
+    devices: Set<string>;
+    clicksInPeriod: number;
+    lastTs: number;
+    lastDateFormatted: string;
+    lastTimeFormatted: string;
+    hasTrueFlag: boolean;
+    hasFalseFlag: boolean;
+    siteMap: Map<string, { clicks: number; days: Set<string> }>;
+    dayMap: Map<
+      string,
+      {
+        dayKey: string;
+        isoDate: string | null;
+        dateFormatted: string;
+        clicks: number;
+        sites: Set<string>;
+        events: ClickEventRecord[];
+      }
+    >;
+  }
+
+  const periodUsersMap = new Map<string, PeriodUserAcc>();
+  const siteTotalClicksMap = new Map<string, number>();
+  let unidentifiedEventsCount = 0;
+  let totalIdentifiedClicks = 0;
+
+  for (const ev of periodEvents) {
+    siteTotalClicksMap.set(
+      ev.site,
+      (siteTotalClicksMap.get(ev.site) ?? 0) + ev.clicks
+    );
+
+    if (!ev.userId) {
+      unidentifiedEventsCount += 1;
+      continue;
+    }
+
+    totalIdentifiedClicks += ev.clicks;
+    const dayKey = ev.isoDate ?? (ev.dateFormatted !== '—' ? ev.dateFormatted : `row_${ev.rowIndex}`);
+
+    let acc = periodUsersMap.get(ev.userId);
+    if (!acc) {
+      acc = {
+        userId: ev.userId,
+        userName: ev.userName,
+        cities: new Set(),
+        devices: new Set(),
+        clicksInPeriod: 0,
+        lastTs: -1,
+        lastDateFormatted: ev.dateFormatted,
+        lastTimeFormatted: ev.timeFormatted,
+        hasTrueFlag: false,
+        hasFalseFlag: false,
+        siteMap: new Map(),
+        dayMap: new Map(),
+      };
+      periodUsersMap.set(ev.userId, acc);
+    }
+
+    if (ev.userName) acc.userName = ev.userName;
+    if (ev.city) acc.cities.add(ev.city);
+    if (ev.device) acc.devices.add(ev.device);
+
+    acc.clicksInPeriod += ev.clicks;
+    if (ev.isNewUserFlag === true) acc.hasTrueFlag = true;
+    if (ev.isNewUserFlag === false) acc.hasFalseFlag = true;
+
+    const ts = ev.timestamp ?? ev.rowIndex;
+    if (ts >= acc.lastTs) {
+      acc.lastTs = ts;
+      acc.lastDateFormatted = ev.dateFormatted;
+      acc.lastTimeFormatted = ev.timeFormatted;
+    }
+
+    let siteEntry = acc.siteMap.get(ev.site);
+    if (!siteEntry) {
+      siteEntry = { clicks: 0, days: new Set() };
+      acc.siteMap.set(ev.site, siteEntry);
+    }
+    siteEntry.clicks += ev.clicks;
+    siteEntry.days.add(dayKey);
+
+    let dayEntry = acc.dayMap.get(dayKey);
+    if (!dayEntry) {
+      dayEntry = {
+        dayKey,
+        isoDate: ev.isoDate,
+        dateFormatted: ev.dateFormatted,
+        clicks: 0,
+        sites: new Set(),
+        events: [],
+      };
+      acc.dayMap.set(dayKey, dayEntry);
+    }
+    dayEntry.clicks += ev.clicks;
+    dayEntry.sites.add(ev.site);
+    dayEntry.events.push(ev);
+  }
+
+  const siteAggAcc = new Map<
+    string,
+    {
+      uniqueUsers: number;
+      newUsers: number;
+      newUserClicks: number;
+    }
+  >();
+
+  for (const site of siteTotalClicksMap.keys()) {
+    siteAggAcc.set(site, {
+      uniqueUsers: 0,
+      newUsers: 0,
+      newUserClicks: 0,
+    });
+  }
+
+  let totalNewUsers = 0;
+  let newUserClicks = 0;
+  const users: UserAggregate[] = [];
+
+  for (const acc of periodUsersMap.values()) {
+    const hist = historicMap.get(acc.userId);
+    const firstEv = hist?.firstEvent;
+
+    let isNewUser = true;
+    if (acc.hasTrueFlag) {
+      isNewUser = true;
+    } else if (acc.hasFalseFlag) {
+      isNewUser = false;
+    } else if (firstEv && hasWindowBounds) {
+      isNewUser = isInWindow(firstEv.isoDate);
+    }
+
+    if (isNewUser) {
+      totalNewUsers += 1;
+      newUserClicks += acc.clicksInPeriod;
+    }
+
+    const sites: UserSiteSummary[] = [];
+    for (const [site, sInfo] of acc.siteMap.entries()) {
+      const firstOnSite = hist?.firstBySite.get(site);
+      let isNewOnSite = isNewUser;
+      if (!acc.hasTrueFlag && !acc.hasFalseFlag && firstOnSite && hasWindowBounds) {
+        isNewOnSite = isInWindow(firstOnSite.isoDate);
+      }
+
+      sites.push({
+        site,
+        clicks: sInfo.clicks,
+        isNewOnSite,
+        daysCount: sInfo.days.size,
+      });
+
+      const sAgg = siteAggAcc.get(site);
+      if (sAgg) {
+        sAgg.uniqueUsers += 1;
+        if (isNewOnSite) {
+          sAgg.newUsers += 1;
+          sAgg.newUserClicks += sInfo.clicks;
+        }
+      }
+    }
+
+    sites.sort((a, b) => b.clicks - a.clicks);
+
+    const days: UserDaySummary[] = Array.from(acc.dayMap.values())
+      .map((d) => ({
+        dayKey: d.dayKey,
+        isoDate: d.isoDate,
+        dateFormatted: d.dateFormatted,
+        clicks: d.clicks,
+        sites: Array.from(d.sites),
+        events: [...d.events].sort((a, b) => compareEventOrder(b, a)),
+      }))
+      .sort((a, b) => {
+        if (a.isoDate && b.isoDate && a.isoDate !== b.isoDate) {
+          return b.isoDate.localeCompare(a.isoDate);
+        }
+        return b.dayKey.localeCompare(a.dayKey);
+      });
+
+    users.push({
+      userId: acc.userId,
+      userName: acc.userName,
+      cities: Array.from(acc.cities),
+      devices: Array.from(acc.devices),
+      isNewUser,
+      firstIsoDate: firstEv?.isoDate ?? null,
+      firstDateFormatted: firstEv?.dateFormatted ?? acc.lastDateFormatted,
+      firstSite: firstEv?.site ?? sites[0]?.site ?? 'Site não informado',
+      clicksInPeriod: acc.clicksInPeriod,
+      totalHistoricClicks: hist?.totalClicks ?? acc.clicksInPeriod,
+      activeDaysCount: days.length,
+      totalHistoricDaysCount: hist?.days.size ?? days.length,
+      lastDateFormatted: acc.lastDateFormatted,
+      lastTimeFormatted: acc.lastTimeFormatted,
+      lastTimestamp: acc.lastTs,
+      sites,
+      days,
+    });
+  }
+
+  users.sort(
+    (a, b) =>
+      b.clicksInPeriod - a.clicksInPeriod ||
+      b.activeDaysCount - a.activeDaysCount ||
+      b.lastTimestamp - a.lastTimestamp
+  );
+
+  const bySite: SiteUsersAggregate[] = Array.from(siteAggAcc.entries())
+    .map(([site, s]) => {
+      const totalClicks = siteTotalClicksMap.get(site) ?? 0;
+      return {
+        site,
+        newUsers: s.newUsers,
+        uniqueUsers: s.uniqueUsers,
+        returningUsers: Math.max(0, s.uniqueUsers - s.newUsers),
+        newUserClicks: s.newUserClicks,
+        totalClicks,
+        shareOfNewUsersPct:
+          totalNewUsers > 0 ? (s.newUsers / totalNewUsers) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.newUsers - a.newUsers || b.totalClicks - a.totalClicks);
+
+  return {
+    hasUserCol: true,
+    totalNewUsers,
+    totalUniqueUsers: periodUsersMap.size,
+    totalReturningUsers: Math.max(0, periodUsersMap.size - totalNewUsers),
+    newUserClicks,
+    totalIdentifiedClicks,
+    unidentifiedEventsCount,
+    bySite,
+    users,
+  };
 }
 
 export function aggregateByHour(events: ClickEventRecord[]): HourlyBucket[] {
@@ -1329,11 +1871,27 @@ export function exportClickEventsCsv(
     return needsQuotes ? `"${escaped}"` : escaped;
   };
 
-  const headers = ['Data', 'Horário', 'Site', 'Página Clicada', 'Cliques'];
+  const includeUser = events.some((ev) => Boolean(ev.userName || ev.userId));
+  const includeCity = events.some((ev) => Boolean(ev.city));
+  const includeDevice = events.some((ev) => Boolean(ev.device));
+
+  const headers = [
+    'Data',
+    'Horário',
+    ...(includeUser ? ['Nome / Usuário'] : []),
+    ...(includeCity ? ['Cidade'] : []),
+    ...(includeDevice ? ['Aparelho'] : []),
+    'Site',
+    'Página Clicada',
+    'Cliques',
+  ];
   const lines = events.map((ev) =>
     [
       ev.dateFormatted,
       ev.timeFormatted,
+      ...(includeUser ? [ev.userName ?? ev.userId ?? ''] : []),
+      ...(includeCity ? [ev.city ?? ''] : []),
+      ...(includeDevice ? [ev.device ?? ''] : []),
       ev.site,
       ev.page,
       String(ev.clicks),

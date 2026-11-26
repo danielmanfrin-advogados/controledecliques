@@ -179,6 +179,110 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               ))}
             </select>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-[#4A3B31] mb-1.5">
+                Coluna do Usuário / IP / ID (opcional)
+              </label>
+              <select
+                value={draft.userCol ?? ''}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, userCol: e.target.value || null }))
+                }
+                className="w-full px-3.5 py-2.5 rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
+              >
+                <option value="">Não mapeada</option>
+                {columns.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-[#4A3B31] mb-1.5">
+                Coluna "Usuário Novo" (opcional)
+              </label>
+              <select
+                value={draft.newUserCol ?? ''}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, newUserCol: e.target.value || null }))
+                }
+                className="w-full px-3.5 py-2.5 rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
+              >
+                <option value="">Detectar automaticamente pelo 1º clique</option>
+                {columns.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-[#4A3B31] mb-1.5">
+                Coluna de Nome (opcional)
+              </label>
+              <select
+                value={draft.nameCol ?? ''}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, nameCol: e.target.value || null }))
+                }
+                className="w-full px-3.5 py-2.5 rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
+              >
+                <option value="">Não mapeada</option>
+                {columns.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-[#4A3B31] mb-1.5">
+                Coluna de Cidade (opcional)
+              </label>
+              <select
+                value={draft.cityCol ?? ''}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, cityCol: e.target.value || null }))
+                }
+                className="w-full px-3.5 py-2.5 rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
+              >
+                <option value="">Não mapeada</option>
+                {columns.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-[#4A3B31] mb-1.5">
+                Coluna de Aparelho (opcional)
+              </label>
+              <select
+                value={draft.deviceCol ?? ''}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, deviceCol: e.target.value || null }))
+                }
+                className="w-full px-3.5 py-2.5 rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
+              >
+                <option value="">Não mapeada</option>
+                {columns.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="px-6 py-4 border-t border-[#EADFD1] flex items-center justify-end gap-2.5">

@@ -72,6 +72,11 @@ export interface ClickColumnMapping {
   dateCol: string | null;
   timeCol: string | null;
   clicksCol: string | null; // null means 1 row = 1 click
+  userCol?: string | null;
+  newUserCol?: string | null;
+  nameCol?: string | null;
+  cityCol?: string | null;
+  deviceCol?: string | null;
 }
 
 export interface ClickEventRecord {
@@ -84,6 +89,11 @@ export interface ClickEventRecord {
   hourOfDay: number | null;
   timestamp: number | null;
   clicks: number;
+  userId: string | null;
+  userName: string | null;
+  city: string | null;
+  device: string | null;
+  isNewUserFlag: boolean | null;
   rawRow: ParsedRow;
 }
 
@@ -92,6 +102,8 @@ export interface SiteAggregate {
   clicks: number;
   sharePct: number;
   uniquePages: number;
+  uniqueUsers: number;
+  newUsers: number;
   lastDateFormatted: string;
   lastTimeFormatted: string;
   peakHour: number | null;
@@ -105,6 +117,64 @@ export interface PageAggregate {
   lastDateFormatted: string;
   lastTimeFormatted: string;
   peakHour: number | null;
+}
+
+export interface UserDaySummary {
+  dayKey: string;
+  isoDate: string | null;
+  dateFormatted: string;
+  clicks: number;
+  sites: string[];
+  events: ClickEventRecord[];
+}
+
+export interface UserSiteSummary {
+  site: string;
+  clicks: number;
+  isNewOnSite: boolean;
+  daysCount: number;
+}
+
+export interface UserAggregate {
+  userId: string;
+  userName: string | null;
+  cities: string[];
+  devices: string[];
+  isNewUser: boolean;
+  firstIsoDate: string | null;
+  firstDateFormatted: string;
+  firstSite: string;
+  clicksInPeriod: number;
+  totalHistoricClicks: number;
+  activeDaysCount: number;
+  totalHistoricDaysCount: number;
+  lastDateFormatted: string;
+  lastTimeFormatted: string;
+  lastTimestamp: number;
+  sites: UserSiteSummary[];
+  days: UserDaySummary[];
+}
+
+export interface SiteUsersAggregate {
+  site: string;
+  newUsers: number;
+  uniqueUsers: number;
+  returningUsers: number;
+  newUserClicks: number;
+  totalClicks: number;
+  shareOfNewUsersPct: number;
+}
+
+export interface UsersAnalyticsSummary {
+  hasUserCol: boolean;
+  totalNewUsers: number;
+  totalUniqueUsers: number;
+  totalReturningUsers: number;
+  newUserClicks: number;
+  totalIdentifiedClicks: number;
+  unidentifiedEventsCount: number;
+  bySite: SiteUsersAggregate[];
+  users: UserAggregate[];
 }
 
 export interface HourlyBucket {
