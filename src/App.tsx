@@ -722,17 +722,28 @@ export default function App() {
     let humanClicks = 0;
     let botClicks = 0;
     let unknownClicks = 0;
+    const humanPeople = new Set<string>();
     for (const ev of scopedEvents) {
       totalClicks += ev.clicks;
-      if (ev.visitorType === 'human') humanClicks += ev.clicks;
-      else if (ev.visitorType === 'bot') botClicks += ev.clicks;
-      else unknownClicks += ev.clicks;
+      if (ev.visitorType === 'human') {
+        humanClicks += ev.clicks;
+        const pKey =
+          ev.userId || ev.userName
+            ? `u:${ev.userId || ev.userName}`
+            : `row:${ev.rowIndex}`;
+        humanPeople.add(pKey);
+      } else if (ev.visitorType === 'bot') {
+        botClicks += ev.clicks;
+      } else {
+        unknownClicks += ev.clicks;
+      }
     }
     const humanSharePct =
       totalClicks > 0 ? Math.round((humanClicks / totalClicks) * 100) : 0;
     return {
       totalClicks,
       humanClicks,
+      humanPeopleCount: humanPeople.size,
       botClicks,
       unknownClicks,
       humanSharePct,
@@ -1618,10 +1629,17 @@ export default function App() {
                         </p>
                         {effectiveMapping.visitorTypeCol ? (
                           <p className="text-sm sm:text-base font-extrabold text-[#2C221E] font-mono tabular-nums mt-0.5">
-                            {scopedTrafficStats.humanClicks.toLocaleString('pt-BR')}{' '}
+                            {scopedTrafficStats.humanPeopleCount.toLocaleString('pt-BR')}{' '}
                             <span className="text-xs font-semibold text-[#1E664B]">
-                              pessoas reais ({scopedTrafficStats.humanSharePct}% de{' '}
-                              {scopedTrafficStats.totalClicks.toLocaleString('pt-BR')} cliques)
+                              {scopedTrafficStats.humanPeopleCount === 1
+                                ? 'pessoa real'
+                                : 'pessoas reais'}{' '}
+                              · {scopedTrafficStats.humanClicks.toLocaleString('pt-BR')}{' '}
+                              {scopedTrafficStats.humanClicks === 1
+                                ? 'clique feito'
+                                : 'cliques feitos'}{' '}
+                              ({scopedTrafficStats.humanSharePct}% de{' '}
+                              {scopedTrafficStats.totalClicks.toLocaleString('pt-BR')})
                             </span>
                           </p>
                         ) : (
@@ -1704,10 +1722,17 @@ export default function App() {
                         </p>
                         {effectiveMapping.visitorTypeCol ? (
                           <p className="text-sm sm:text-base font-extrabold text-[#2C221E] font-mono tabular-nums mt-0.5">
-                            {scopedTrafficStats.humanClicks.toLocaleString('pt-BR')}{' '}
+                            {scopedTrafficStats.humanPeopleCount.toLocaleString('pt-BR')}{' '}
                             <span className="text-xs font-semibold text-[#1E664B]">
-                              pessoas reais ({scopedTrafficStats.humanSharePct}% de{' '}
-                              {scopedTrafficStats.totalClicks.toLocaleString('pt-BR')} cliques)
+                              {scopedTrafficStats.humanPeopleCount === 1
+                                ? 'pessoa real'
+                                : 'pessoas reais'}{' '}
+                              · {scopedTrafficStats.humanClicks.toLocaleString('pt-BR')}{' '}
+                              {scopedTrafficStats.humanClicks === 1
+                                ? 'clique feito'
+                                : 'cliques feitos'}{' '}
+                              ({scopedTrafficStats.humanSharePct}% de{' '}
+                              {scopedTrafficStats.totalClicks.toLocaleString('pt-BR')})
                             </span>
                           </p>
                         ) : (

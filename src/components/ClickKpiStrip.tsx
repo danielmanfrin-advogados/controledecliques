@@ -37,16 +37,30 @@ export const ClickKpiStrip: React.FC<ClickKpiStripProps> = ({
   onOpenMapping,
   onOpenRealPeople,
 }) => {
-  const { totalClicks, humanClicks, botClicks } = useMemo(() => {
+  const { totalClicks, humanClicks, botClicks, realPeopleCount } = useMemo(() => {
     let total = 0;
     let human = 0;
     let bot = 0;
+    const people = new Set<string>();
     for (const e of events) {
       total += e.clicks;
-      if (e.visitorType === 'human') human += e.clicks;
-      else if (e.visitorType === 'bot') bot += e.clicks;
+      if (e.visitorType === 'human') {
+        human += e.clicks;
+        const key =
+          e.userId || e.userName
+            ? `u:${e.userId || e.userName}`
+            : `row:${e.rowIndex}`;
+        people.add(key);
+      } else if (e.visitorType === 'bot') {
+        bot += e.clicks;
+      }
     }
-    return { totalClicks: total, humanClicks: human, botClicks: bot };
+    return {
+      totalClicks: total,
+      humanClicks: human,
+      botClicks: bot,
+      realPeopleCount: people.size,
+    };
   }, [events]);
 
   const shareOfAll =
@@ -91,7 +105,7 @@ export const ClickKpiStrip: React.FC<ClickKpiStripProps> = ({
         </div>
       </div>
 
-      {/* Card 2: Soft Mint + Emerald 3D Icon (Clickable Real Human Clicks right next to Total Clicks) */}
+      {/* Card 2: Soft Mint + Emerald 3D Icon (Clickable Real People + Clicks right next to Total Clicks) */}
       {hasVisitorTypeCol && onOpenRealPeople ? (
         <button
           type="button"
@@ -112,9 +126,18 @@ export const ClickKpiStrip: React.FC<ClickKpiStripProps> = ({
             <p className="text-xs font-semibold text-[#395E50]">
               Pessoas Reais
             </p>
-            <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
-              {humanClicks.toLocaleString('pt-BR')}
-            </p>
+            <div className="flex items-baseline gap-2 flex-wrap mt-0.5">
+              <span className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums">
+                {realPeopleCount.toLocaleString('pt-BR')}
+              </span>
+              <span className="text-xs font-bold text-[#395E50]">
+                {realPeopleCount === 1 ? 'pessoa' : 'pessoas'}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#FAF7F2]/80 text-[#1E664B] text-xs font-extrabold font-mono tabular-nums">
+                {humanClicks.toLocaleString('pt-BR')}{' '}
+                {humanClicks === 1 ? 'clique' : 'cliques'}
+              </span>
+            </div>
             <p className="text-xs font-semibold text-[#237053] mt-1 truncate tabular-nums">
               {humanSharePct}% dos cliques ·{' '}
               {botClicks.toLocaleString('pt-BR')}{' '}
@@ -133,9 +156,18 @@ export const ClickKpiStrip: React.FC<ClickKpiStripProps> = ({
             </p>
             {hasVisitorTypeCol ? (
               <>
-                <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
-                  {humanClicks.toLocaleString('pt-BR')}
-                </p>
+                <div className="flex items-baseline gap-2 flex-wrap mt-0.5">
+                  <span className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums">
+                    {realPeopleCount.toLocaleString('pt-BR')}
+                  </span>
+                  <span className="text-xs font-bold text-[#395E50]">
+                    {realPeopleCount === 1 ? 'pessoa' : 'pessoas'}
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#FAF7F2]/80 text-[#1E664B] text-xs font-extrabold font-mono tabular-nums">
+                    {humanClicks.toLocaleString('pt-BR')}{' '}
+                    {humanClicks === 1 ? 'clique' : 'cliques'}
+                  </span>
+                </div>
                 <p className="text-xs font-semibold text-[#237053] mt-1 truncate tabular-nums">
                   {humanSharePct}% dos cliques ·{' '}
                   {botClicks.toLocaleString('pt-BR')}{' '}

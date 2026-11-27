@@ -72,6 +72,7 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
     hasVisitorType,
     totalClicks,
     humanClicks,
+    humanPeopleCount,
     botClicks,
     humanRowsCount,
     botRowsCount,
@@ -85,6 +86,7 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
     let bot = 0;
     let humanRows = 0;
     let botRows = 0;
+    const humanPeople = new Set<string>();
 
     for (const ev of events) {
       if (ev.userName || ev.userId) nameFound = true;
@@ -97,6 +99,11 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
       if (ev.visitorType === 'human') {
         human += ev.clicks;
         humanRows += 1;
+        const pKey =
+          ev.userId || ev.userName
+            ? `u:${ev.userId || ev.userName}`
+            : `row:${ev.rowIndex}`;
+        humanPeople.add(pKey);
       } else if (ev.visitorType === 'bot') {
         bot += ev.clicks;
         botRows += 1;
@@ -109,6 +116,7 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
       hasVisitorType: visitorTypeFound,
       totalClicks: total,
       humanClicks: human,
+      humanPeopleCount: humanPeople.size,
       botClicks: bot,
       humanRowsCount: humanRows,
       botRowsCount: botRows,
@@ -323,8 +331,10 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
                 <span className="inline-flex items-center gap-1.5 font-extrabold text-[#1E664B] tabular-nums">
                   <UserCheck className="w-4 h-4 text-[#2F8F6B]" />
                   <span>
-                    {humanClicks.toLocaleString('pt-BR')} cliques de pessoas
-                    reais ({humanSharePct}%)
+                    {humanPeopleCount.toLocaleString('pt-BR')}{' '}
+                    {humanPeopleCount === 1 ? 'pessoa real' : 'pessoas reais'} ·{' '}
+                    {humanClicks.toLocaleString('pt-BR')}{' '}
+                    {humanClicks === 1 ? 'clique feito' : 'cliques feitos'} ({humanSharePct}%)
                   </span>
                 </span>
                 <span className="text-[#4E6B5F] tabular-nums">

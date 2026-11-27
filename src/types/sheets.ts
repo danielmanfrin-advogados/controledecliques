@@ -106,6 +106,7 @@ export interface SiteAggregate {
   site: string;
   clicks: number;
   humanClicks: number;
+  humanPeopleCount: number;
   botClicks: number;
   sharePct: number;
   uniquePages: number;
@@ -121,6 +122,7 @@ export interface PageAggregate {
   page: string;
   clicks: number;
   humanClicks: number;
+  humanPeopleCount: number;
   botClicks: number;
   sharePct: number;
   lastDateFormatted: string;
@@ -187,6 +189,7 @@ export interface UsersAnalyticsSummary {
   newUserClicks: number;
   totalIdentifiedClicks: number;
   totalHumanClicks: number;
+  totalHumanPeopleCount: number;
   totalBotClicks: number;
   unidentifiedEventsCount: number;
   bySite: SiteUsersAggregate[];

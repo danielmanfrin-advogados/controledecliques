@@ -257,13 +257,22 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
             </div>
             <div className="w-full">
               <p className="text-xs font-semibold text-[#3B5E50]">
-                Pessoas Reais (Cliques)
+                Pessoas Reais
               </p>
-              <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
-                {summary.totalHumanClicks.toLocaleString('pt-BR')}
-              </p>
+              <div className="flex items-baseline gap-2 flex-wrap mt-0.5">
+                <span className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums">
+                  {summary.totalHumanPeopleCount.toLocaleString('pt-BR')}
+                </span>
+                <span className="text-xs font-bold text-[#3B5E50]">
+                  {summary.totalHumanPeopleCount === 1 ? 'pessoa' : 'pessoas'}
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#FAF7F2]/80 text-[#1E664B] text-xs font-extrabold font-mono tabular-nums">
+                  {summary.totalHumanClicks.toLocaleString('pt-BR')}{' '}
+                  {summary.totalHumanClicks === 1 ? 'clique' : 'cliques'}
+                </span>
+              </div>
               <p className="text-xs font-semibold text-[#1E664B] mt-1 truncate tabular-nums">
-                {humanSharePct}% reais · {summary.totalBotClicks.toLocaleString('pt-BR')} robôs
+                {humanSharePct}% dos cliques · {summary.totalBotClicks.toLocaleString('pt-BR')} robôs
               </p>
             </div>
           </button>
@@ -274,15 +283,24 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
             </div>
             <div>
               <p className="text-xs font-semibold text-[#3B5E50]">
-                Pessoas Reais (Cliques)
+                Pessoas Reais
               </p>
               {hasVisitorData ? (
                 <>
-                  <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
-                    {summary.totalHumanClicks.toLocaleString('pt-BR')}
-                  </p>
+                  <div className="flex items-baseline gap-2 flex-wrap mt-0.5">
+                    <span className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums">
+                      {summary.totalHumanPeopleCount.toLocaleString('pt-BR')}
+                    </span>
+                    <span className="text-xs font-bold text-[#3B5E50]">
+                      {summary.totalHumanPeopleCount === 1 ? 'pessoa' : 'pessoas'}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#FAF7F2]/80 text-[#1E664B] text-xs font-extrabold font-mono tabular-nums">
+                      {summary.totalHumanClicks.toLocaleString('pt-BR')}{' '}
+                      {summary.totalHumanClicks === 1 ? 'clique' : 'cliques'}
+                    </span>
+                  </div>
                   <p className="text-xs font-semibold text-[#1E664B] mt-1 truncate tabular-nums">
-                    {humanSharePct}% reais · {summary.totalBotClicks.toLocaleString('pt-BR')} robôs
+                    {humanSharePct}% dos cliques · {summary.totalBotClicks.toLocaleString('pt-BR')} robôs
                   </p>
                 </>
               ) : (

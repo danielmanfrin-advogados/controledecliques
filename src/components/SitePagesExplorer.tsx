@@ -130,7 +130,10 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#D9ECE4] text-[#1E664B] font-bold text-[11px]">
                           <UserCheck className="w-3 h-3" />
                           <span>
-                            {site.humanClicks.toLocaleString('pt-BR')} reais
+                            {site.humanPeopleCount.toLocaleString('pt-BR')}{' '}
+                            {site.humanPeopleCount === 1 ? 'pessoa' : 'pessoas'} ·{' '}
+                            {site.humanClicks.toLocaleString('pt-BR')}{' '}
+                            {site.humanClicks === 1 ? 'clique' : 'cliques'}
                             {site.botClicks > 0
                               ? ` · ${site.botClicks.toLocaleString('pt-BR')} ${
                                   site.botClicks === 1 ? 'robô' : 'robôs'
@@ -256,7 +259,10 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#D9ECE4] text-[#1E664B] font-bold text-[11px]">
                           <UserCheck className="w-3 h-3" />
                           <span>
-                            {p.humanClicks.toLocaleString('pt-BR')} reais
+                            {p.humanPeopleCount.toLocaleString('pt-BR')}{' '}
+                            {p.humanPeopleCount === 1 ? 'pessoa' : 'pessoas'} ·{' '}
+                            {p.humanClicks.toLocaleString('pt-BR')}{' '}
+                            {p.humanClicks === 1 ? 'clique' : 'cliques'}
                             {p.botClicks > 0
                               ? ` · ${p.botClicks.toLocaleString('pt-BR')} ${
                                   p.botClicks === 1 ? 'robô' : 'robôs'

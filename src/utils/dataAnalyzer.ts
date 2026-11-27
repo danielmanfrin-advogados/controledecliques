@@ -1375,6 +1375,11 @@ function getPeakHour(hourCounts: Map<number, number>): number | null {
   return bestHour;
 }
 
+function getRealPersonKey(ev: ClickEventRecord): string {
+  const id = ev.userId || ev.userName;
+  return id ? `u:${id}` : `row:${ev.rowIndex}`;
+}
+
 export function aggregateBySite(
   events: ClickEventRecord[],
   newUsersBySiteMap?: Map<string, number>
@@ -1385,6 +1390,7 @@ export function aggregateBySite(
     {
       clicks: number;
       humanClicks: number;
+      humanPeople: Set<string>;
       botClicks: number;
       pages: Set<string>;
       users: Set<string>;
@@ -1401,6 +1407,7 @@ export function aggregateBySite(
       entry = {
         clicks: 0,
         humanClicks: 0,
+        humanPeople: new Set(),
         botClicks: 0,
         pages: new Set(),
         users: new Set(),
@@ -1413,8 +1420,12 @@ export function aggregateBySite(
     }
 
     entry.clicks += ev.clicks;
-    if (ev.visitorType === 'human') entry.humanClicks += ev.clicks;
-    else if (ev.visitorType === 'bot') entry.botClicks += ev.clicks;
+    if (ev.visitorType === 'human') {
+      entry.humanClicks += ev.clicks;
+      entry.humanPeople.add(getRealPersonKey(ev));
+    } else if (ev.visitorType === 'bot') {
+      entry.botClicks += ev.clicks;
+    }
     entry.pages.add(ev.page);
     if (ev.userId) {
       entry.users.add(ev.userId);
@@ -1440,6 +1451,7 @@ export function aggregateBySite(
       site,
       clicks: d.clicks,
       humanClicks: d.humanClicks,
+      humanPeopleCount: d.humanPeople.size,
       botClicks: d.botClicks,
       sharePct: totalClicks > 0 ? (d.clicks / totalClicks) * 100 : 0,
       uniquePages: d.pages.size,
@@ -1468,6 +1480,7 @@ export function aggregatePages(
       page: string;
       clicks: number;
       humanClicks: number;
+      humanPeople: Set<string>;
       botClicks: number;
       lastTs: number;
       lastDate: string;
@@ -1485,6 +1498,7 @@ export function aggregatePages(
         page: ev.page,
         clicks: 0,
         humanClicks: 0,
+        humanPeople: new Set(),
         botClicks: 0,
         lastTs: -1,
         lastDate: ev.dateFormatted,
@@ -1495,8 +1509,12 @@ export function aggregatePages(
     }
 
     entry.clicks += ev.clicks;
-    if (ev.visitorType === 'human') entry.humanClicks += ev.clicks;
-    else if (ev.visitorType === 'bot') entry.botClicks += ev.clicks;
+    if (ev.visitorType === 'human') {
+      entry.humanClicks += ev.clicks;
+      entry.humanPeople.add(getRealPersonKey(ev));
+    } else if (ev.visitorType === 'bot') {
+      entry.botClicks += ev.clicks;
+    }
     if (ev.hourOfDay !== null) {
       entry.hours.set(
         ev.hourOfDay,
@@ -1518,6 +1536,7 @@ export function aggregatePages(
       page: d.page,
       clicks: d.clicks,
       humanClicks: d.humanClicks,
+      humanPeopleCount: d.humanPeople.size,
       botClicks: d.botClicks,
       sharePct: totalClicks > 0 ? (d.clicks / totalClicks) * 100 : 0,
       lastDateFormatted: d.lastDate,
@@ -1551,9 +1570,14 @@ export function analyzeUsers(
   if (!options.hasUserCol) {
     let totalHumanClicks = 0;
     let totalBotClicks = 0;
+    const humanPeople = new Set<string>();
     for (const ev of periodEvents) {
-      if (ev.visitorType === 'human') totalHumanClicks += ev.clicks;
-      else if (ev.visitorType === 'bot') totalBotClicks += ev.clicks;
+      if (ev.visitorType === 'human') {
+        totalHumanClicks += ev.clicks;
+        humanPeople.add(getRealPersonKey(ev));
+      } else if (ev.visitorType === 'bot') {
+        totalBotClicks += ev.clicks;
+      }
     }
     return {
       hasUserCol: false,
@@ -1563,6 +1587,7 @@ export function analyzeUsers(
       newUserClicks: 0,
       totalIdentifiedClicks: 0,
       totalHumanClicks,
+      totalHumanPeopleCount: humanPeople.size,
       totalBotClicks,
       unidentifiedEventsCount: periodEvents.length,
       bySite: [],
@@ -1658,6 +1683,7 @@ export function analyzeUsers(
   let totalIdentifiedClicks = 0;
   let totalHumanClicks = 0;
   let totalBotClicks = 0;
+  const totalHumanPeople = new Set<string>();
 
   for (const ev of periodEvents) {
     siteTotalClicksMap.set(
@@ -1666,6 +1692,7 @@ export function analyzeUsers(
     );
     if (ev.visitorType === 'human') {
       totalHumanClicks += ev.clicks;
+      totalHumanPeople.add(getRealPersonKey(ev));
       siteHumanClicksMap.set(
         ev.site,
         (siteHumanClicksMap.get(ev.site) ?? 0) + ev.clicks
@@ -1897,6 +1924,7 @@ export function analyzeUsers(
     newUserClicks,
     totalIdentifiedClicks,
     totalHumanClicks,
+    totalHumanPeopleCount: totalHumanPeople.size,
     totalBotClicks,
     unidentifiedEventsCount,
     bySite,

@@ -18,6 +18,7 @@ interface HourDetailRow {
   rangeLabel: string;
   clicks: number;
   humanClicks: number;
+  humanPeopleCount: number;
   botClicks: number;
   recordCount: number;
   sharePct: number;
@@ -41,6 +42,7 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
     maxClicks,
     totalClicks,
     totalHumanClicks,
+    totalHumanPeopleCount,
     totalBotClicks,
     unscheduledCount,
     hasVisitorType,
@@ -49,12 +51,14 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
       hour,
       clicks: 0,
       humanClicks: 0,
+      humanPeople: new Set<string>(),
       botClicks: 0,
       recordCount: 0,
       siteMap: new Map<string, number>(),
       pageMap: new Map<string, number>(),
     }));
 
+    const allHumanPeople = new Set<string>();
     let unscheduled = 0;
     let visitorFound = hasVisitorTypeCol;
 
@@ -68,8 +72,17 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
       }
       const bucket = byHour[ev.hourOfDay];
       bucket.clicks += ev.clicks;
-      if (ev.visitorType === 'human') bucket.humanClicks += ev.clicks;
-      else if (ev.visitorType === 'bot') bucket.botClicks += ev.clicks;
+      if (ev.visitorType === 'human') {
+        bucket.humanClicks += ev.clicks;
+        const pKey =
+          ev.userId || ev.userName
+            ? `u:${ev.userId || ev.userName}`
+            : `row:${ev.rowIndex}`;
+        bucket.humanPeople.add(pKey);
+        allHumanPeople.add(pKey);
+      } else if (ev.visitorType === 'bot') {
+        bucket.botClicks += ev.clicks;
+      }
       bucket.recordCount += 1;
       bucket.siteMap.set(ev.site, (bucket.siteMap.get(ev.site) ?? 0) + ev.clicks);
       bucket.pageMap.set(ev.page, (bucket.pageMap.get(ev.page) ?? 0) + ev.clicks);
@@ -105,6 +118,7 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
         rangeLabel: `${hh}:00 – ${hh}:59`,
         clicks: b.clicks,
         humanClicks: b.humanClicks,
+        humanPeopleCount: b.humanPeople.size,
         botClicks: b.botClicks,
         recordCount: b.recordCount,
         sharePct: total > 0 ? Math.round((b.clicks / total) * 1000) / 10 : 0,
@@ -118,6 +132,7 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
       maxClicks: max,
       totalClicks: total,
       totalHumanClicks: totalHuman,
+      totalHumanPeopleCount: allHumanPeople.size,
       totalBotClicks: totalBot,
       unscheduledCount: unscheduled,
       hasVisitorType: visitorFound,
@@ -156,7 +171,10 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
               >
                 <UserCheck className="w-3.5 h-3.5 text-[#2F8F6B]" />
                 <span>
-                  {totalHumanClicks.toLocaleString('pt-BR')} pessoas reais ({humanPct}%)
+                  {totalHumanPeopleCount.toLocaleString('pt-BR')}{' '}
+                  {totalHumanPeopleCount === 1 ? 'pessoa real' : 'pessoas reais'} ·{' '}
+                  {totalHumanClicks.toLocaleString('pt-BR')}{' '}
+                  {totalHumanClicks === 1 ? 'clique' : 'cliques'} ({humanPct}%)
                   {totalBotClicks > 0
                     ? ` · ${totalBotClicks.toLocaleString('pt-BR')} ${
                         totalBotClicks === 1 ? 'robô' : 'robôs'
@@ -280,7 +298,8 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
                     {hasVisitorType && (
                       <td className="py-3 px-5 text-right font-mono tabular-nums whitespace-nowrap">
                         <span className="font-extrabold text-[#1E664B]">
-                          {row.humanClicks.toLocaleString('pt-BR')}
+                          {row.humanPeopleCount.toLocaleString('pt-BR')} pess. ·{' '}
+                          {row.humanClicks.toLocaleString('pt-BR')} cl.
                         </span>
                         {row.botClicks > 0 && (
                           <span className="text-[11px] text-[#8F2D22] ml-1">
