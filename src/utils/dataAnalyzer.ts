@@ -9,6 +9,11 @@ import {
   ParsedRow,
   ParsedSheetDataset,
   PeriodPreset,
+  RealPeopleSummary,
+  RealPersonDetail,
+  RealPersonEventItem,
+  RealPersonPageVisit,
+  RealPersonSiteVisit,
   SiteAggregate,
   SiteUsersAggregate,
   SpreadsheetMetadata,
@@ -1379,6 +1384,8 @@ export function aggregateBySite(
     string,
     {
       clicks: number;
+      humanClicks: number;
+      botClicks: number;
       pages: Set<string>;
       users: Set<string>;
       lastTs: number;
@@ -1393,6 +1400,8 @@ export function aggregateBySite(
     if (!entry) {
       entry = {
         clicks: 0,
+        humanClicks: 0,
+        botClicks: 0,
         pages: new Set(),
         users: new Set(),
         lastTs: -1,
@@ -1404,6 +1413,8 @@ export function aggregateBySite(
     }
 
     entry.clicks += ev.clicks;
+    if (ev.visitorType === 'human') entry.humanClicks += ev.clicks;
+    else if (ev.visitorType === 'bot') entry.botClicks += ev.clicks;
     entry.pages.add(ev.page);
     if (ev.userId) {
       entry.users.add(ev.userId);
@@ -1428,6 +1439,8 @@ export function aggregateBySite(
     .map(([site, d]) => ({
       site,
       clicks: d.clicks,
+      humanClicks: d.humanClicks,
+      botClicks: d.botClicks,
       sharePct: totalClicks > 0 ? (d.clicks / totalClicks) * 100 : 0,
       uniquePages: d.pages.size,
       uniqueUsers: d.users.size,
@@ -1454,6 +1467,8 @@ export function aggregatePages(
       site: string;
       page: string;
       clicks: number;
+      humanClicks: number;
+      botClicks: number;
       lastTs: number;
       lastDate: string;
       lastTime: string;
@@ -1469,6 +1484,8 @@ export function aggregatePages(
         site: ev.site,
         page: ev.page,
         clicks: 0,
+        humanClicks: 0,
+        botClicks: 0,
         lastTs: -1,
         lastDate: ev.dateFormatted,
         lastTime: ev.timeFormatted,
@@ -1478,6 +1495,8 @@ export function aggregatePages(
     }
 
     entry.clicks += ev.clicks;
+    if (ev.visitorType === 'human') entry.humanClicks += ev.clicks;
+    else if (ev.visitorType === 'bot') entry.botClicks += ev.clicks;
     if (ev.hourOfDay !== null) {
       entry.hours.set(
         ev.hourOfDay,
@@ -1498,6 +1517,8 @@ export function aggregatePages(
       site: d.site,
       page: d.page,
       clicks: d.clicks,
+      humanClicks: d.humanClicks,
+      botClicks: d.botClicks,
       sharePct: totalClicks > 0 ? (d.clicks / totalClicks) * 100 : 0,
       lastDateFormatted: d.lastDate,
       lastTimeFormatted: d.lastTime,
@@ -1528,6 +1549,12 @@ export function analyzeUsers(
   }
 ): UsersAnalyticsSummary {
   if (!options.hasUserCol) {
+    let totalHumanClicks = 0;
+    let totalBotClicks = 0;
+    for (const ev of periodEvents) {
+      if (ev.visitorType === 'human') totalHumanClicks += ev.clicks;
+      else if (ev.visitorType === 'bot') totalBotClicks += ev.clicks;
+    }
     return {
       hasUserCol: false,
       totalNewUsers: 0,
@@ -1535,6 +1562,8 @@ export function analyzeUsers(
       totalReturningUsers: 0,
       newUserClicks: 0,
       totalIdentifiedClicks: 0,
+      totalHumanClicks,
+      totalBotClicks,
       unidentifiedEventsCount: periodEvents.length,
       bySite: [],
       users: [],
@@ -1600,6 +1629,8 @@ export function analyzeUsers(
     cities: Set<string>;
     devices: Set<string>;
     clicksInPeriod: number;
+    humanClicks: number;
+    botClicks: number;
     lastTs: number;
     lastDateFormatted: string;
     lastTimeFormatted: string;
@@ -1621,14 +1652,31 @@ export function analyzeUsers(
 
   const periodUsersMap = new Map<string, PeriodUserAcc>();
   const siteTotalClicksMap = new Map<string, number>();
+  const siteHumanClicksMap = new Map<string, number>();
+  const siteBotClicksMap = new Map<string, number>();
   let unidentifiedEventsCount = 0;
   let totalIdentifiedClicks = 0;
+  let totalHumanClicks = 0;
+  let totalBotClicks = 0;
 
   for (const ev of periodEvents) {
     siteTotalClicksMap.set(
       ev.site,
       (siteTotalClicksMap.get(ev.site) ?? 0) + ev.clicks
     );
+    if (ev.visitorType === 'human') {
+      totalHumanClicks += ev.clicks;
+      siteHumanClicksMap.set(
+        ev.site,
+        (siteHumanClicksMap.get(ev.site) ?? 0) + ev.clicks
+      );
+    } else if (ev.visitorType === 'bot') {
+      totalBotClicks += ev.clicks;
+      siteBotClicksMap.set(
+        ev.site,
+        (siteBotClicksMap.get(ev.site) ?? 0) + ev.clicks
+      );
+    }
 
     if (!ev.userId) {
       unidentifiedEventsCount += 1;
@@ -1646,6 +1694,8 @@ export function analyzeUsers(
         cities: new Set(),
         devices: new Set(),
         clicksInPeriod: 0,
+        humanClicks: 0,
+        botClicks: 0,
         lastTs: -1,
         lastDateFormatted: ev.dateFormatted,
         lastTimeFormatted: ev.timeFormatted,
@@ -1662,6 +1712,8 @@ export function analyzeUsers(
     if (ev.device) acc.devices.add(ev.device);
 
     acc.clicksInPeriod += ev.clicks;
+    if (ev.visitorType === 'human') acc.humanClicks += ev.clicks;
+    else if (ev.visitorType === 'bot') acc.botClicks += ev.clicks;
     if (ev.isNewUserFlag === true) acc.hasTrueFlag = true;
     if (ev.isNewUserFlag === false) acc.hasFalseFlag = true;
 
@@ -1779,11 +1831,23 @@ export function analyzeUsers(
         return b.dayKey.localeCompare(a.dayKey);
       });
 
+    const visitorType: VisitorTrafficType | 'mixed' =
+      acc.humanClicks > 0 && acc.botClicks > 0
+        ? 'mixed'
+        : acc.humanClicks > 0
+        ? 'human'
+        : acc.botClicks > 0
+        ? 'bot'
+        : 'unknown';
+
     users.push({
       userId: acc.userId,
       userName: acc.userName,
       cities: Array.from(acc.cities),
       devices: Array.from(acc.devices),
+      visitorType,
+      humanClicks: acc.humanClicks,
+      botClicks: acc.botClicks,
       isNewUser,
       firstIsoDate: firstEv?.isoDate ?? null,
       firstDateFormatted: firstEv?.dateFormatted ?? acc.lastDateFormatted,
@@ -1817,6 +1881,8 @@ export function analyzeUsers(
         returningUsers: Math.max(0, s.uniqueUsers - s.newUsers),
         newUserClicks: s.newUserClicks,
         totalClicks,
+        humanClicks: siteHumanClicksMap.get(site) ?? 0,
+        botClicks: siteBotClicksMap.get(site) ?? 0,
         shareOfNewUsersPct:
           totalNewUsers > 0 ? (s.newUsers / totalNewUsers) * 100 : 0,
       };
@@ -1830,6 +1896,8 @@ export function analyzeUsers(
     totalReturningUsers: Math.max(0, periodUsersMap.size - totalNewUsers),
     newUserClicks,
     totalIdentifiedClicks,
+    totalHumanClicks,
+    totalBotClicks,
     unidentifiedEventsCount,
     bySite,
     users,
@@ -2073,3 +2141,330 @@ export function exportClickEventsCsv(
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+export function analyzeRealPeople(
+  allEvents: ClickEventRecord[],
+  scopedEvents: ClickEventRecord[],
+  options: {
+    period: PeriodPreset;
+    referenceDate: Date;
+    customStart?: string;
+    customEnd?: string;
+  }
+): RealPeopleSummary {
+  let startIso: string | null = null;
+  let endIso: string | null = null;
+  if (options.period === 'custom') {
+    startIso = options.customStart || null;
+    endIso = options.customEnd || null;
+  } else if (options.period !== 'all') {
+    const bounds = getPeriodBounds(options.period, options.referenceDate);
+    startIso = bounds.startIso;
+    endIso = bounds.endIso;
+  }
+
+  const hasWindowBounds = Boolean(startIso || endIso);
+  const isInWindow = (isoDate: string | null): boolean => {
+    if (!hasWindowBounds) return true;
+    if (!isoDate) return false;
+    if (startIso && isoDate < startIso) return false;
+    if (endIso && isoDate > endIso) return false;
+    return true;
+  };
+
+  interface SiteHistInfo {
+    firstEvent: ClickEventRecord;
+    clicks: number;
+    days: Set<string>;
+  }
+  interface UserHistInfo {
+    firstEvent: ClickEventRecord;
+    days: Set<string>;
+    bySite: Map<string, SiteHistInfo>;
+  }
+
+  const historicMap = new Map<string, UserHistInfo>();
+  for (const ev of allEvents) {
+    if (!ev.userId) continue;
+    const dayKey =
+      ev.isoDate ??
+      (ev.dateFormatted !== '—' ? ev.dateFormatted : `row_${ev.rowIndex}`);
+    let uHist = historicMap.get(ev.userId);
+    if (!uHist) {
+      uHist = {
+        firstEvent: ev,
+        days: new Set([dayKey]),
+        bySite: new Map([
+          [
+            ev.site,
+            { firstEvent: ev, clicks: ev.clicks, days: new Set([dayKey]) },
+          ],
+        ]),
+      };
+      historicMap.set(ev.userId, uHist);
+    } else {
+      if (compareEventOrder(ev, uHist.firstEvent) < 0) {
+        uHist.firstEvent = ev;
+      }
+      uHist.days.add(dayKey);
+      let sHist = uHist.bySite.get(ev.site);
+      if (!sHist) {
+        sHist = { firstEvent: ev, clicks: 0, days: new Set() };
+        uHist.bySite.set(ev.site, sHist);
+      }
+      if (compareEventOrder(ev, sHist.firstEvent) < 0) {
+        sHist.firstEvent = ev;
+      }
+      sHist.clicks += ev.clicks;
+      sHist.days.add(dayKey);
+    }
+  }
+
+  let totalHumanClicks = 0;
+  let totalBotClicks = 0;
+  const humanScopedEvents: ClickEventRecord[] = [];
+  for (const ev of scopedEvents) {
+    if (ev.visitorType === 'human') {
+      totalHumanClicks += ev.clicks;
+      humanScopedEvents.push(ev);
+    } else if (ev.visitorType === 'bot') {
+      totalBotClicks += ev.clicks;
+    }
+  }
+
+  interface PersonAcc {
+    key: string;
+    displayName: string;
+    userId: string | null;
+    isIdentified: boolean;
+    totalHumanClicks: number;
+    cities: Set<string>;
+    devices: Set<string>;
+    firstEvent: ClickEventRecord;
+    lastEvent: ClickEventRecord;
+    lastTs: number;
+    hasTrueFlag: boolean;
+    hasFalseFlag: boolean;
+    events: ClickEventRecord[];
+  }
+
+  const peopleMap = new Map<string, PersonAcc>();
+
+  for (const ev of humanScopedEvents) {
+    const identifiedId = ev.userId || ev.userName;
+    const key = identifiedId ? `u:${identifiedId}` : `row:${ev.rowIndex}`;
+    const displayName =
+      ev.userName || ev.userId || `Visitante #${ev.rowIndex}`;
+
+    let acc = peopleMap.get(key);
+    if (!acc) {
+      acc = {
+        key,
+        displayName,
+        userId: ev.userId,
+        isIdentified: Boolean(identifiedId),
+        totalHumanClicks: 0,
+        cities: new Set(),
+        devices: new Set(),
+        firstEvent: ev,
+        lastEvent: ev,
+        lastTs: ev.timestamp ?? ev.rowIndex,
+        hasTrueFlag: false,
+        hasFalseFlag: false,
+        events: [],
+      };
+      peopleMap.set(key, acc);
+    }
+
+    if (ev.userName) acc.displayName = ev.userName;
+    if (ev.city) acc.cities.add(ev.city);
+    if (ev.device) acc.devices.add(ev.device);
+    acc.totalHumanClicks += ev.clicks;
+    if (ev.isNewUserFlag === true) acc.hasTrueFlag = true;
+    if (ev.isNewUserFlag === false) acc.hasFalseFlag = true;
+    if (compareEventOrder(ev, acc.firstEvent) < 0) {
+      acc.firstEvent = ev;
+    }
+    if (compareEventOrder(ev, acc.lastEvent) >= 0) {
+      acc.lastEvent = ev;
+      acc.lastTs = ev.timestamp ?? ev.rowIndex;
+    }
+    acc.events.push(ev);
+  }
+
+  const people: RealPersonDetail[] = [];
+  const enrichedEvents: RealPersonEventItem[] = [];
+
+  for (const acc of peopleMap.values()) {
+    const uHist = acc.userId ? historicMap.get(acc.userId) : undefined;
+
+    const siteAccMap = new Map<
+      string,
+      {
+        clicks: number;
+        hasTrue: boolean;
+        hasFalse: boolean;
+        pagesMap: Map<string, RealPersonPageVisit & { lastOrder: ClickEventRecord }>;
+      }
+    >();
+
+    const allPagesMap = new Map<
+      string,
+      RealPersonPageVisit & { lastOrder: ClickEventRecord }
+    >();
+
+    for (const ev of acc.events) {
+      let sAcc = siteAccMap.get(ev.site);
+      if (!sAcc) {
+        sAcc = {
+          clicks: 0,
+          hasTrue: false,
+          hasFalse: false,
+          pagesMap: new Map(),
+        };
+        siteAccMap.set(ev.site, sAcc);
+      }
+      sAcc.clicks += ev.clicks;
+      if (ev.isNewUserFlag === true) sAcc.hasTrue = true;
+      if (ev.isNewUserFlag === false) sAcc.hasFalse = true;
+
+      const existingSitePage = sAcc.pagesMap.get(ev.page);
+      if (!existingSitePage) {
+        sAcc.pagesMap.set(ev.page, {
+          site: ev.site,
+          page: ev.page,
+          clicks: ev.clicks,
+          lastDateFormatted: ev.dateFormatted,
+          lastTimeFormatted: ev.timeFormatted,
+          lastOrder: ev,
+        });
+      } else {
+        existingSitePage.clicks += ev.clicks;
+        if (compareEventOrder(ev, existingSitePage.lastOrder) >= 0) {
+          existingSitePage.lastOrder = ev;
+          existingSitePage.lastDateFormatted = ev.dateFormatted;
+          existingSitePage.lastTimeFormatted = ev.timeFormatted;
+        }
+      }
+
+      const globalPageKey = `${ev.site}|||${ev.page}`;
+      const existingGlobalPage = allPagesMap.get(globalPageKey);
+      if (!existingGlobalPage) {
+        allPagesMap.set(globalPageKey, {
+          site: ev.site,
+          page: ev.page,
+          clicks: ev.clicks,
+          lastDateFormatted: ev.dateFormatted,
+          lastTimeFormatted: ev.timeFormatted,
+          lastOrder: ev,
+        });
+      } else {
+        existingGlobalPage.clicks += ev.clicks;
+        if (compareEventOrder(ev, existingGlobalPage.lastOrder) >= 0) {
+          existingGlobalPage.lastOrder = ev;
+          existingGlobalPage.lastDateFormatted = ev.dateFormatted;
+          existingGlobalPage.lastTimeFormatted = ev.timeFormatted;
+        }
+      }
+    }
+
+    const siteStatusMap = new Map<string, boolean>();
+    const sites: RealPersonSiteVisit[] = [];
+
+    for (const [site, sAcc] of siteAccMap.entries()) {
+      const sHist = uHist?.bySite.get(site);
+      const historicDaysOnSite = sHist?.days.size ?? 1;
+      const historicClicksOnSite = sHist?.clicks ?? sAcc.clicks;
+      const firstDateOnSite =
+        sHist?.firstEvent.dateFormatted ?? acc.firstEvent.dateFormatted;
+
+      let isNewOnSite = true;
+      if (sAcc.hasFalse) {
+        isNewOnSite = false;
+      } else if (sAcc.hasTrue && historicDaysOnSite <= 1) {
+        isNewOnSite = true;
+      } else if (hasWindowBounds && sHist) {
+        isNewOnSite = isInWindow(sHist.firstEvent.isoDate);
+      } else if (!hasWindowBounds) {
+        isNewOnSite = historicDaysOnSite <= 1;
+      }
+
+      siteStatusMap.set(site, isNewOnSite);
+
+      const sitePages: RealPersonPageVisit[] = Array.from(sAcc.pagesMap.values())
+        .map(({ lastOrder: _lo, ...p }) => p)
+        .sort((a, b) => b.clicks - a.clicks);
+
+      sites.push({
+        site,
+        clicks: sAcc.clicks,
+        isNewOnSite,
+        firstDateOnSite,
+        historicClicksOnSite,
+        historicDaysOnSite,
+        pages: sitePages,
+      });
+    }
+
+    sites.sort((a, b) => b.clicks - a.clicks);
+
+    const pages: RealPersonPageVisit[] = Array.from(allPagesMap.values())
+      .map(({ lastOrder: _lo, ...p }) => p)
+      .sort((a, b) => b.clicks - a.clicks);
+
+    const sortedEvents: RealPersonEventItem[] = [...acc.events]
+      .sort((a, b) => compareEventOrder(b, a))
+      .map((ev) => {
+        const item: RealPersonEventItem = {
+          ...ev,
+          isNewOnSite: siteStatusMap.get(ev.site) ?? true,
+        };
+        enrichedEvents.push(item);
+        return item;
+      });
+
+    const isNewOverall =
+      sites.length > 0 ? sites.every((s) => s.isNewOnSite) : !acc.hasFalseFlag;
+
+    people.push({
+      key: acc.key,
+      displayName: acc.displayName,
+      userId: acc.userId,
+      isIdentified: acc.isIdentified,
+      totalHumanClicks: acc.totalHumanClicks,
+      isNewOverall,
+      cities: Array.from(acc.cities),
+      devices: Array.from(acc.devices),
+      firstDateFormatted: acc.firstEvent.dateFormatted,
+      firstTimeFormatted: acc.firstEvent.timeFormatted,
+      lastDateFormatted: acc.lastEvent.dateFormatted,
+      lastTimeFormatted: acc.lastEvent.timeFormatted,
+      lastTimestamp: acc.lastTs,
+      sites,
+      pages,
+      events: sortedEvents,
+    });
+  }
+
+  people.sort(
+    (a, b) =>
+      b.lastTimestamp - a.lastTimestamp ||
+      b.totalHumanClicks - a.totalHumanClicks
+  );
+
+  enrichedEvents.sort((a, b) => compareEventOrder(b, a));
+
+  const newPeopleCount = people.filter((p) => p.isNewOverall).length;
+  const returningPeopleCount = people.length - newPeopleCount;
+
+  return {
+    totalHumanClicks,
+    totalBotClicks,
+    totalPeopleCount: people.length,
+    newPeopleCount,
+    returningPeopleCount,
+    people,
+    events: enrichedEvents,
+  };
+}
+

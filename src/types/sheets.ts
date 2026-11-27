@@ -105,6 +105,8 @@ export interface ClickEventRecord {
 export interface SiteAggregate {
   site: string;
   clicks: number;
+  humanClicks: number;
+  botClicks: number;
   sharePct: number;
   uniquePages: number;
   uniqueUsers: number;
@@ -118,6 +120,8 @@ export interface PageAggregate {
   site: string;
   page: string;
   clicks: number;
+  humanClicks: number;
+  botClicks: number;
   sharePct: number;
   lastDateFormatted: string;
   lastTimeFormatted: string;
@@ -145,6 +149,9 @@ export interface UserAggregate {
   userName: string | null;
   cities: string[];
   devices: string[];
+  visitorType: VisitorTrafficType | 'mixed';
+  humanClicks: number;
+  botClicks: number;
   isNewUser: boolean;
   firstIsoDate: string | null;
   firstDateFormatted: string;
@@ -167,6 +174,8 @@ export interface SiteUsersAggregate {
   returningUsers: number;
   newUserClicks: number;
   totalClicks: number;
+  humanClicks: number;
+  botClicks: number;
   shareOfNewUsersPct: number;
 }
 
@@ -177,6 +186,8 @@ export interface UsersAnalyticsSummary {
   totalReturningUsers: number;
   newUserClicks: number;
   totalIdentifiedClicks: number;
+  totalHumanClicks: number;
+  totalBotClicks: number;
   unidentifiedEventsCount: number;
   bySite: SiteUsersAggregate[];
   users: UserAggregate[];
@@ -202,3 +213,55 @@ export interface SyncDiffSummary {
   updatedCells: number;
   timestamp: Date;
 }
+
+export interface RealPersonPageVisit {
+  site: string;
+  page: string;
+  clicks: number;
+  lastDateFormatted: string;
+  lastTimeFormatted: string;
+}
+
+export interface RealPersonSiteVisit {
+  site: string;
+  clicks: number;
+  isNewOnSite: boolean;
+  firstDateOnSite: string;
+  historicClicksOnSite: number;
+  historicDaysOnSite: number;
+  pages: RealPersonPageVisit[];
+}
+
+export interface RealPersonEventItem extends ClickEventRecord {
+  isNewOnSite: boolean;
+}
+
+export interface RealPersonDetail {
+  key: string;
+  displayName: string;
+  userId: string | null;
+  isIdentified: boolean;
+  totalHumanClicks: number;
+  isNewOverall: boolean;
+  cities: string[];
+  devices: string[];
+  firstDateFormatted: string;
+  firstTimeFormatted: string;
+  lastDateFormatted: string;
+  lastTimeFormatted: string;
+  lastTimestamp: number;
+  sites: RealPersonSiteVisit[];
+  pages: RealPersonPageVisit[];
+  events: RealPersonEventItem[];
+}
+
+export interface RealPeopleSummary {
+  totalHumanClicks: number;
+  totalBotClicks: number;
+  totalPeopleCount: number;
+  newPeopleCount: number;
+  returningPeopleCount: number;
+  people: RealPersonDetail[];
+  events: RealPersonEventItem[];
+}
+

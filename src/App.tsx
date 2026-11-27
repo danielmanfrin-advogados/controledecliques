@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { User } from 'firebase/auth';
 import {
+  Bot,
   Calendar,
+  ChevronRight,
   Clock,
   ExternalLink,
   FolderOpen,
@@ -14,6 +16,7 @@ import {
   Search,
   SlidersHorizontal,
   Table2,
+  UserCheck,
   UserPlus,
   UserRoundCog,
   Users,
@@ -47,6 +50,7 @@ import {
   aggregateBySite,
   aggregatePages,
   aggregateTimelineForPeriod,
+  analyzeRealPeople,
   analyzeUsers,
   buildClickEvents,
   buildParsedDataset,
@@ -67,6 +71,7 @@ import { ClickLogTable } from './components/ClickLogTable';
 import { RawSheetTable } from './components/RawSheetTable';
 import { ColumnMappingModal } from './components/ColumnMappingModal';
 import { RowDetailDrawer } from './components/RowDetailDrawer';
+import { RealPeopleDrawer } from './components/RealPeopleDrawer';
 
 type NavSection = 'overview' | 'sites' | 'users' | 'hours' | 'logs' | 'raw';
 
@@ -171,6 +176,7 @@ export default function App() {
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
 
   const [inspectedRow, setInspectedRow] = useState<ParsedRow | null>(null);
+  const [showRealPeopleModal, setShowRealPeopleModal] = useState<boolean>(false);
 
   const datasetRef = useRef<ParsedSheetDataset | null>(null);
   datasetRef.current = dataset;
@@ -710,6 +716,51 @@ export default function App() {
       return true;
     });
   }, [periodEvents, selectedSite, selectedPage, selectedHour]);
+
+  const scopedTrafficStats = useMemo(() => {
+    let totalClicks = 0;
+    let humanClicks = 0;
+    let botClicks = 0;
+    let unknownClicks = 0;
+    for (const ev of scopedEvents) {
+      totalClicks += ev.clicks;
+      if (ev.visitorType === 'human') humanClicks += ev.clicks;
+      else if (ev.visitorType === 'bot') botClicks += ev.clicks;
+      else unknownClicks += ev.clicks;
+    }
+    const humanSharePct =
+      totalClicks > 0 ? Math.round((humanClicks / totalClicks) * 100) : 0;
+    return {
+      totalClicks,
+      humanClicks,
+      botClicks,
+      unknownClicks,
+      humanSharePct,
+    };
+  }, [scopedEvents]);
+
+  const realPeopleSummary = useMemo(
+    () =>
+      analyzeRealPeople(
+        allClickEvents,
+        activeSection === 'raw' ? allClickEvents : scopedEvents,
+        {
+          period: activeSection === 'raw' ? 'all' : period,
+          referenceDate,
+          customStart,
+          customEnd,
+        }
+      ),
+    [
+      allClickEvents,
+      scopedEvents,
+      activeSection,
+      period,
+      referenceDate,
+      customStart,
+      customEnd,
+    ]
+  );
 
   const siteAndPageEvents = useMemo(() => {
     return periodEvents.filter((ev) => {
@@ -1478,6 +1529,7 @@ export default function App() {
                     periodLabel={periodLabel}
                     hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
                     onOpenMapping={() => setShowMappingModal(true)}
+                    onOpenRealPeople={() => setShowRealPeopleModal(true)}
                   />
 
                   {usersSummary.hasUserCol && (
@@ -1534,6 +1586,7 @@ export default function App() {
                     onSelectSite={(s) => setSelectedSite(s)}
                     onSelectPage={(p) => setSelectedPage(p)}
                     hasUserCol={usersSummary.hasUserCol}
+                    hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
                   />
 
                   <HourlyAndTimelineSection
@@ -1550,16 +1603,75 @@ export default function App() {
               )}
 
               {activeSection === 'sites' && (
-                <SitePagesExplorer
-                  sites={sitesAgg}
-                  pages={pagesAgg}
-                  siteColorIndexMap={siteColorIndexMap}
-                  selectedSite={selectedSite}
-                  selectedPage={selectedPage}
-                  onSelectSite={(s) => setSelectedSite(s)}
-                  onSelectPage={(p) => setSelectedPage(p)}
-                  hasUserCol={usersSummary.hasUserCol}
-                />
+                <>
+                  <section
+                    aria-label="Resumo de pessoas reais em sites e páginas"
+                    className="clay-mint rounded-[24px] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-2xl bg-[#278260] text-white flex items-center justify-center shrink-0 clay-icon-tile">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[#3B5E50]">
+                          Pessoas Reais no recorte atual ({periodLabel})
+                        </p>
+                        {effectiveMapping.visitorTypeCol ? (
+                          <p className="text-sm sm:text-base font-extrabold text-[#2C221E] font-mono tabular-nums mt-0.5">
+                            {scopedTrafficStats.humanClicks.toLocaleString('pt-BR')}{' '}
+                            <span className="text-xs font-semibold text-[#1E664B]">
+                              pessoas reais ({scopedTrafficStats.humanSharePct}% de{' '}
+                              {scopedTrafficStats.totalClicks.toLocaleString('pt-BR')} cliques)
+                            </span>
+                          </p>
+                        ) : (
+                          <p className="text-xs font-semibold text-[#3B5E50] mt-0.5">
+                            Mapeie a coluna Pessoa Real / Robô para ver os números por site e página.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {effectiveMapping.visitorTypeCol ? (
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold tabular-nums">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FDE4E1] text-[#8F2D22]">
+                          <Bot className="w-3.5 h-3.5" />
+                          <span>
+                            {scopedTrafficStats.botClicks.toLocaleString('pt-BR')} robôs
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowRealPeopleModal(true)}
+                          className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl clay-button-active text-[#1E664B] hover:text-[#154A36] cursor-pointer"
+                        >
+                          <span>Ver quem são</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowMappingModal(true)}
+                        className="px-4 py-2 text-xs font-bold rounded-2xl clay-button-active text-[#1E664B] cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                      >
+                        Mapear coluna Pessoa/Robô
+                      </button>
+                    )}
+                  </section>
+
+                  <SitePagesExplorer
+                    sites={sitesAgg}
+                    pages={pagesAgg}
+                    siteColorIndexMap={siteColorIndexMap}
+                    selectedSite={selectedSite}
+                    selectedPage={selectedPage}
+                    onSelectSite={(s) => setSelectedSite(s)}
+                    onSelectPage={(p) => setSelectedPage(p)}
+                    hasUserCol={usersSummary.hasUserCol}
+                    hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
+                  />
+                </>
               )}
 
               {activeSection === 'users' && (
@@ -1569,13 +1681,71 @@ export default function App() {
                   selectedSite={selectedSite}
                   onSelectSite={(s) => setSelectedSite(s)}
                   periodLabel={periodLabel}
+                  hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
                   onOpenMapping={() => setShowMappingModal(true)}
                   onInspectRow={setInspectedRow}
+                  onOpenRealPeople={() => setShowRealPeopleModal(true)}
                 />
               )}
 
               {activeSection === 'hours' && (
                 <>
+                  <section
+                    aria-label="Resumo de pessoas reais por horário"
+                    className="clay-mint rounded-[24px] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-2xl bg-[#278260] text-white flex items-center justify-center shrink-0 clay-icon-tile">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[#3B5E50]">
+                          Pessoas Reais nos Horários ({periodLabel})
+                        </p>
+                        {effectiveMapping.visitorTypeCol ? (
+                          <p className="text-sm sm:text-base font-extrabold text-[#2C221E] font-mono tabular-nums mt-0.5">
+                            {scopedTrafficStats.humanClicks.toLocaleString('pt-BR')}{' '}
+                            <span className="text-xs font-semibold text-[#1E664B]">
+                              pessoas reais ({scopedTrafficStats.humanSharePct}% de{' '}
+                              {scopedTrafficStats.totalClicks.toLocaleString('pt-BR')} cliques)
+                            </span>
+                          </p>
+                        ) : (
+                          <p className="text-xs font-semibold text-[#3B5E50] mt-0.5">
+                            Mapeie a coluna Pessoa Real / Robô para ver os cliques reais por faixa horária.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {effectiveMapping.visitorTypeCol ? (
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold tabular-nums">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FDE4E1] text-[#8F2D22]">
+                          <Bot className="w-3.5 h-3.5" />
+                          <span>
+                            {scopedTrafficStats.botClicks.toLocaleString('pt-BR')} robôs
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowRealPeopleModal(true)}
+                          className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl clay-button-active text-[#1E664B] hover:text-[#154A36] cursor-pointer"
+                        >
+                          <span>Ver quem são</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowMappingModal(true)}
+                        className="px-4 py-2 text-xs font-bold rounded-2xl clay-button-active text-[#1E664B] cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                      >
+                        Mapear coluna Pessoa/Robô
+                      </button>
+                    )}
+                  </section>
+
                   <HourlyAndTimelineSection
                     hourlyBuckets={hourlyBuckets}
                     timelineBuckets={timelineBuckets}
@@ -1595,6 +1765,8 @@ export default function App() {
                       setSelectedHour((prev) => (prev === hr ? null : hr))
                     }
                     periodLabel={periodLabel}
+                    hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
+                    onOpenRealPeople={() => setShowRealPeopleModal(true)}
                   />
 
                   <ClickLogTable
@@ -1605,6 +1777,7 @@ export default function App() {
                     onInspectRow={setInspectedRow}
                     hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
                     onOpenMapping={() => setShowMappingModal(true)}
+                    onOpenRealPeople={() => setShowRealPeopleModal(true)}
                   />
                 </>
               )}
@@ -1618,6 +1791,7 @@ export default function App() {
                   onInspectRow={setInspectedRow}
                   hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
                   onOpenMapping={() => setShowMappingModal(true)}
+                  onOpenRealPeople={() => setShowRealPeopleModal(true)}
                 />
               )}
 
@@ -1627,6 +1801,10 @@ export default function App() {
                   sheetTitle={dataset.sheetTitle}
                   columns={dataset.columns}
                   rows={dataset.rows}
+                  events={allClickEvents}
+                  visitorTypeCol={effectiveMapping.visitorTypeCol}
+                  onOpenMapping={() => setShowMappingModal(true)}
+                  onOpenRealPeople={() => setShowRealPeopleModal(true)}
                   onInspectRow={setInspectedRow}
                 />
               )}
@@ -1655,6 +1833,24 @@ export default function App() {
           rawRowCount={dataset.rawRowCount}
           onSave={handleSaveMapping}
           onClose={() => setShowMappingModal(false)}
+        />
+      )}
+
+      {dataset && (
+        <RealPeopleDrawer
+          isOpen={showRealPeopleModal}
+          onClose={() => setShowRealPeopleModal(false)}
+          summary={realPeopleSummary}
+          siteColorIndexMap={siteColorIndexMap}
+          periodLabel={activeSection === 'raw' ? 'Planilha completa' : periodLabel}
+          selectedSite={activeSection === 'raw' ? null : selectedSite}
+          selectedPage={activeSection === 'raw' ? null : selectedPage}
+          selectedHour={activeSection === 'raw' ? null : selectedHour}
+          hasUserCol={Boolean(effectiveMapping.userCol || effectiveMapping.nameCol)}
+          hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
+          spreadsheetTitle={dataset.spreadsheetTitle}
+          onOpenMapping={() => setShowMappingModal(true)}
+          onInspectRow={setInspectedRow}
         />
       )}
 

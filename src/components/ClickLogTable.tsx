@@ -21,6 +21,7 @@ interface ClickLogTableProps {
   onInspectRow: (row: ParsedRow) => void;
   hasVisitorTypeCol?: boolean;
   onOpenMapping?: () => void;
+  onOpenRealPeople?: () => void;
 }
 
 type SortField =
@@ -44,6 +45,7 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
   onInspectRow,
   hasVisitorTypeCol = false,
   onOpenMapping,
+  onOpenRealPeople,
 }) => {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -303,7 +305,21 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-1">
           {hasVisitorType ? (
             <>
-              <div className="clay-mint rounded-2xl px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+              <button
+                type="button"
+                onClick={onOpenRealPeople}
+                disabled={!onOpenRealPeople}
+                className={`clay-mint rounded-2xl px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-left ${
+                  onOpenRealPeople
+                    ? 'cursor-pointer hover:scale-[1.01] transition-transform'
+                    : ''
+                }`}
+                title={
+                  onOpenRealPeople
+                    ? 'Clique para ver detalhes completos das pessoas reais'
+                    : undefined
+                }
+              >
                 <span className="inline-flex items-center gap-1.5 font-extrabold text-[#1E664B] tabular-nums">
                   <UserCheck className="w-4 h-4 text-[#2F8F6B]" />
                   <span>
@@ -320,7 +336,13 @@ export const ClickLogTable: React.FC<ClickLogTableProps> = ({
                 <span className="text-[#4E6B5F] tabular-nums">
                   Total: <strong>{totalClicks.toLocaleString('pt-BR')}</strong>
                 </span>
-              </div>
+                {onOpenRealPeople && (
+                  <span className="inline-flex items-center gap-0.5 font-bold text-[#1E664B] underline">
+                    <span>Ver detalhes</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                )}
+              </button>
 
               <div className="flex flex-wrap items-center gap-1.5">
                 <button

@@ -21,7 +21,7 @@ export const RowDetailDrawer: React.FC<RowDetailDrawerProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#2C221E]/35 backdrop-blur-xs flex justify-end"
+      className="fixed inset-0 z-[60] bg-[#2C221E]/35 backdrop-blur-xs flex justify-end"
       role="dialog"
       aria-modal="true"
       onClick={onClose}

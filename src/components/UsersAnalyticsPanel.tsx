@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Bot,
   Calendar,
   ChevronDown,
   ChevronLeft,
@@ -25,12 +26,15 @@ interface UsersAnalyticsPanelProps {
   selectedSite: string | null;
   onSelectSite: (site: string | null) => void;
   periodLabel: string;
+  hasVisitorTypeCol?: boolean;
   onOpenMapping: () => void;
   onInspectRow: (row: ParsedRow) => void;
+  onOpenRealPeople?: () => void;
 }
 
 type UserFilterMode = 'new' | 'all' | 'returning';
 type UserSortMode = 'clicks' | 'days' | 'recent';
+type TrafficFilterMode = 'all' | 'human' | 'bot';
 
 export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
   summary,
@@ -38,15 +42,23 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
   selectedSite,
   onSelectSite,
   periodLabel,
+  hasVisitorTypeCol = false,
   onOpenMapping,
   onInspectRow,
+  onOpenRealPeople,
 }) => {
   const [filterMode, setFilterMode] = useState<UserFilterMode>('new');
+  const [trafficFilter, setTrafficFilter] = useState<TrafficFilterMode>('all');
   const [sortMode, setSortMode] = useState<UserSortMode>('clicks');
   const [userSearch, setUserSearch] = useState('');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 25;
+
+  const hasVisitorData =
+    hasVisitorTypeCol ||
+    summary.totalHumanClicks > 0 ||
+    summary.totalBotClicks > 0;
 
   const siteScopedUsers = useMemo(() => {
     if (!selectedSite) return summary.users;
@@ -58,17 +70,23 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
   const counts = useMemo(() => {
     let newCount = 0;
     let returningCount = 0;
+    let humanUsersCount = 0;
+    let botUsersCount = 0;
     for (const u of siteScopedUsers) {
       const isNewForView = selectedSite
         ? u.sites.find((s) => s.site === selectedSite)?.isNewOnSite ?? u.isNewUser
         : u.isNewUser;
       if (isNewForView) newCount += 1;
       else returningCount += 1;
+      if (u.humanClicks > 0) humanUsersCount += 1;
+      if (u.botClicks > 0) botUsersCount += 1;
     }
     return {
       newCount,
       returningCount,
       allCount: siteScopedUsers.length,
+      humanUsersCount,
+      botUsersCount,
     };
   }, [siteScopedUsers, selectedSite]);
 
@@ -81,6 +99,8 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
 
       if (filterMode === 'new' && !isNewForView) return false;
       if (filterMode === 'returning' && isNewForView) return false;
+      if (trafficFilter === 'human' && u.humanClicks === 0) return false;
+      if (trafficFilter === 'bot' && u.botClicks === 0) return false;
 
       if (!q) return true;
       const inId = u.userId.toLowerCase().includes(q);
@@ -131,7 +151,7 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
         getDaysForView(b) - getDaysForView(a)
       );
     });
-  }, [siteScopedUsers, filterMode, sortMode, userSearch, selectedSite]);
+  }, [siteScopedUsers, filterMode, trafficFilter, sortMode, userSearch, selectedSite]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -184,12 +204,23 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
         })
       : '0';
 
+  const totalPeriodClicksForPct = Math.max(
+    summary.totalHumanClicks + summary.totalBotClicks,
+    summary.newUserClicks
+  );
+  const humanSharePct =
+    totalPeriodClicksForPct > 0
+      ? Math.round((summary.totalHumanClicks / totalPeriodClicksForPct) * 100)
+      : 0;
+
   return (
     <div className="space-y-5">
-      {/* 4 Claymorphism KPIs */}
+      {/* Claymorphism KPIs */}
       <section
-        aria-label="Indicadores de usuários novos"
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5"
+        aria-label="Indicadores de usuários novos e pessoas reais"
+        className={`grid grid-cols-1 sm:grid-cols-2 ${
+          hasVisitorData ? 'xl:grid-cols-5 gap-4' : 'xl:grid-cols-4 gap-5'
+        }`}
       >
         <div className="clay-sage rounded-[24px] p-5 flex flex-col justify-between gap-4">
           <div className="w-11 h-11 rounded-2xl bg-[#4C8F84] text-white flex items-center justify-center clay-icon-tile">
@@ -208,9 +239,73 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
           </div>
         </div>
 
+        {hasVisitorData && onOpenRealPeople ? (
+          <button
+            type="button"
+            onClick={onOpenRealPeople}
+            className="clay-mint rounded-[24px] p-5 flex flex-col justify-between gap-4 text-left cursor-pointer hover:scale-[1.015] active:scale-[0.99] transition-transform group"
+            title="Clique para ver detalhes completos das pessoas reais"
+          >
+            <div className="w-full flex items-start justify-between gap-2">
+              <div className="w-11 h-11 rounded-2xl bg-[#278260] text-white flex items-center justify-center clay-icon-tile">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#1E664B] bg-[#FAF7F2]/75 px-2 py-1 rounded-xl group-hover:bg-[#FAF7F2] transition-colors">
+                <span>Ver quem são</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <div className="w-full">
+              <p className="text-xs font-semibold text-[#3B5E50]">
+                Pessoas Reais (Cliques)
+              </p>
+              <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
+                {summary.totalHumanClicks.toLocaleString('pt-BR')}
+              </p>
+              <p className="text-xs font-semibold text-[#1E664B] mt-1 truncate tabular-nums">
+                {humanSharePct}% reais · {summary.totalBotClicks.toLocaleString('pt-BR')} robôs
+              </p>
+            </div>
+          </button>
+        ) : (
+          <div className="clay-mint rounded-[24px] p-5 flex flex-col justify-between gap-4">
+            <div className="w-11 h-11 rounded-2xl bg-[#278260] text-white flex items-center justify-center clay-icon-tile">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-[#3B5E50]">
+                Pessoas Reais (Cliques)
+              </p>
+              {hasVisitorData ? (
+                <>
+                  <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
+                    {summary.totalHumanClicks.toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-xs font-semibold text-[#1E664B] mt-1 truncate tabular-nums">
+                    {humanSharePct}% reais · {summary.totalBotClicks.toLocaleString('pt-BR')} robôs
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg font-extrabold tracking-tight text-[#2C221E] mt-1">
+                    Não mapeado
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onOpenMapping}
+                    className="text-xs font-bold text-[#1E664B] hover:underline mt-1 cursor-pointer text-left"
+                  >
+                    Mapear coluna Pessoa / Robô →
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="clay-peach rounded-[24px] p-5 flex flex-col justify-between gap-4">
           <div className="w-11 h-11 rounded-2xl bg-[#E36A42] text-white flex items-center justify-center clay-icon-tile">
-            <UserCheck className="w-5 h-5" />
+            <Users className="w-5 h-5" />
           </div>
           <div>
             <p className="text-xs font-semibold text-[#6F4B37]">
@@ -242,7 +337,7 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
           </div>
         </div>
 
-        <div className="clay-lavender rounded-[24px] p-5 flex flex-col justify-between gap-4">
+        <div className="clay-lavender rounded-[24px] p-5 flex flex-col justify-between gap-4 sm:col-span-2 xl:col-span-1">
           <div className="w-11 h-11 rounded-2xl bg-[#766BB0] text-white flex items-center justify-center clay-icon-tile">
             <Globe className="w-5 h-5" />
           </div>
@@ -352,6 +447,17 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
                       {siteRow.newUserClicks.toLocaleString('pt-BR')} cliques
                     </span>
                   </div>
+                  {hasVisitorData && (
+                    <div className="mt-2 pt-2 border-t border-[#EADFD1]/70 flex items-center justify-between text-[11px] tabular-nums">
+                      <span className="inline-flex items-center gap-1 font-bold text-[#1E664B]">
+                        <UserCheck className="w-3 h-3" />
+                        {siteRow.humanClicks.toLocaleString('pt-BR')} pessoas reais
+                      </span>
+                      <span className="font-semibold text-[#8F2D22]">
+                        {siteRow.botClicks.toLocaleString('pt-BR')} robôs
+                      </span>
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -450,6 +556,55 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
               <option value="days">Mais dias ativos</option>
               <option value="recent">Último clique</option>
             </select>
+
+            {hasVisitorData && (
+              <div className="inline-flex items-center rounded-2xl bg-[#EFE6D8] p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrafficFilter('all');
+                    setPage(1);
+                  }}
+                  className={`px-2.5 py-1.5 text-[11px] font-bold rounded-xl transition-all cursor-pointer tabular-nums ${
+                    trafficFilter === 'all'
+                      ? 'clay-button-active text-[#2C221E]'
+                      : 'text-[#6E5F54] hover:text-[#2C221E]'
+                  }`}
+                >
+                  Todos ({counts.allCount.toLocaleString('pt-BR')})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrafficFilter('human');
+                    setPage(1);
+                  }}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-xl transition-all cursor-pointer tabular-nums ${
+                    trafficFilter === 'human'
+                      ? 'clay-button-active text-[#1E664B]'
+                      : 'text-[#6E5F54] hover:text-[#1E664B]'
+                  }`}
+                >
+                  <UserCheck className="w-3 h-3" />
+                  <span>Pessoas reais ({counts.humanUsersCount.toLocaleString('pt-BR')})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrafficFilter('bot');
+                    setPage(1);
+                  }}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-xl transition-all cursor-pointer tabular-nums ${
+                    trafficFilter === 'bot'
+                      ? 'clay-button-active text-[#8F2D22]'
+                      : 'text-[#6E5F54] hover:text-[#8F2D22]'
+                  }`}
+                >
+                  <Bot className="w-3 h-3" />
+                  <span>Robôs ({counts.botUsersCount.toLocaleString('pt-BR')})</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -523,6 +678,28 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
                         >
                           {isNewForView ? 'Novo' : 'Recorrente'}
                         </span>
+                        {hasVisitorData && u.visitorType !== 'unknown' && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold ${
+                              u.visitorType === 'human'
+                                ? 'bg-[#D9ECE4] text-[#1E664B]'
+                                : u.visitorType === 'bot'
+                                ? 'bg-[#FDE4E1] text-[#8F2D22]'
+                                : 'bg-[#F3ECE2] text-[#5E4E42]'
+                            }`}
+                          >
+                            {u.visitorType === 'bot' ? (
+                              <Bot className="w-3 h-3" />
+                            ) : (
+                              <UserCheck className="w-3 h-3" />
+                            )}
+                            {u.visitorType === 'human'
+                              ? 'Pessoa real'
+                              : u.visitorType === 'bot'
+                              ? 'Robô'
+                              : `Misto (${u.humanClicks} real · ${u.botClicks} robô)`}
+                          </span>
+                        )}
                         <span className="text-[11px] text-[#6E5F54] tabular-nums">
                           1º clique: {u.firstDateFormatted}
                         </span>
@@ -702,6 +879,27 @@ export const UsersAnalyticsPanel: React.FC<UsersAnalyticsPanelProps> = ({
                                           <span className="inline-flex items-center gap-1 text-[11px] text-[#5E4E42] bg-[#EAE6F3] px-2 py-0.5 rounded-lg">
                                             <Smartphone className="w-3 h-3 text-[#766BB0]" />
                                             {ev.device}
+                                          </span>
+                                        )}
+                                        {hasVisitorData && ev.visitorType !== 'unknown' && (
+                                          <span
+                                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg ${
+                                              ev.visitorType === 'human'
+                                                ? 'bg-[#D9ECE4] text-[#1E664B]'
+                                                : 'bg-[#FDE4E1] text-[#8F2D22]'
+                                            }`}
+                                          >
+                                            {ev.visitorType === 'human' ? (
+                                              <>
+                                                <UserCheck className="w-3 h-3" />
+                                                <span>Pessoa real</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Bot className="w-3 h-3" />
+                                                <span>Robô</span>
+                                              </>
+                                            )}
                                           </span>
                                         )}
                                       </div>

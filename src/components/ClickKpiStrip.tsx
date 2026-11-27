@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import {
+  ChevronRight,
   Clock,
   FileText,
   Globe,
@@ -22,6 +23,7 @@ interface ClickKpiStripProps {
   periodLabel: string;
   hasVisitorTypeCol?: boolean;
   onOpenMapping?: () => void;
+  onOpenRealPeople?: () => void;
 }
 
 export const ClickKpiStrip: React.FC<ClickKpiStripProps> = ({
@@ -33,6 +35,7 @@ export const ClickKpiStrip: React.FC<ClickKpiStripProps> = ({
   periodLabel,
   hasVisitorTypeCol = false,
   onOpenMapping,
+  onOpenRealPeople,
 }) => {
   const { totalClicks, humanClicks, botClicks } = useMemo(() => {
     let total = 0;
@@ -88,48 +91,80 @@ export const ClickKpiStrip: React.FC<ClickKpiStripProps> = ({
         </div>
       </div>
 
-      {/* Card 2: Soft Mint + Emerald 3D Icon (Real Human Clicks right next to Total Clicks) */}
-      <div className="clay-mint rounded-[24px] p-5 flex flex-col justify-between gap-4">
-        <div className="w-11 h-11 rounded-2xl bg-[#2F8F6B] text-white flex items-center justify-center clay-icon-tile">
-          <UserCheck className="w-5 h-5" />
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-[#395E50]">
-            Pessoas Reais
-          </p>
-          {hasVisitorTypeCol ? (
-            <>
-              <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
-                {humanClicks.toLocaleString('pt-BR')}
-              </p>
-              <p className="text-xs font-semibold text-[#237053] mt-1 truncate tabular-nums">
-                {humanSharePct}% dos cliques ·{' '}
-                {botClicks.toLocaleString('pt-BR')}{' '}
-                {botClicks === 1 ? 'robô' : 'robôs'}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
-                —
-              </p>
-              {onOpenMapping ? (
-                <button
-                  type="button"
-                  onClick={onOpenMapping}
-                  className="text-xs font-bold text-[#237053] hover:text-[#18523C] underline mt-1 cursor-pointer text-left"
-                >
-                  Mapear coluna Pessoa/Robô
-                </button>
-              ) : (
-                <p className="text-xs font-semibold text-[#395E50] mt-1 truncate">
-                  Coluna não identificada
+      {/* Card 2: Soft Mint + Emerald 3D Icon (Clickable Real Human Clicks right next to Total Clicks) */}
+      {hasVisitorTypeCol && onOpenRealPeople ? (
+        <button
+          type="button"
+          onClick={onOpenRealPeople}
+          className="clay-mint rounded-[24px] p-5 flex flex-col justify-between gap-4 text-left cursor-pointer hover:scale-[1.015] active:scale-[0.99] transition-transform group"
+          title="Clique para ver quais pessoas reais clicaram, sites, páginas, horários e cidades"
+        >
+          <div className="w-full flex items-start justify-between gap-2">
+            <div className="w-11 h-11 rounded-2xl bg-[#2F8F6B] text-white flex items-center justify-center clay-icon-tile">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#1E664B] bg-[#FAF7F2]/75 px-2.5 py-1 rounded-xl group-hover:bg-[#FAF7F2] transition-colors">
+              <span>Ver quem são</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="w-full">
+            <p className="text-xs font-semibold text-[#395E50]">
+              Pessoas Reais
+            </p>
+            <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
+              {humanClicks.toLocaleString('pt-BR')}
+            </p>
+            <p className="text-xs font-semibold text-[#237053] mt-1 truncate tabular-nums">
+              {humanSharePct}% dos cliques ·{' '}
+              {botClicks.toLocaleString('pt-BR')}{' '}
+              {botClicks === 1 ? 'robô' : 'robôs'}
+            </p>
+          </div>
+        </button>
+      ) : (
+        <div className="clay-mint rounded-[24px] p-5 flex flex-col justify-between gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-[#2F8F6B] text-white flex items-center justify-center clay-icon-tile">
+            <UserCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[#395E50]">
+              Pessoas Reais
+            </p>
+            {hasVisitorTypeCol ? (
+              <>
+                <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
+                  {humanClicks.toLocaleString('pt-BR')}
                 </p>
-              )}
-            </>
-          )}
+                <p className="text-xs font-semibold text-[#237053] mt-1 truncate tabular-nums">
+                  {humanSharePct}% dos cliques ·{' '}
+                  {botClicks.toLocaleString('pt-BR')}{' '}
+                  {botClicks === 1 ? 'robô' : 'robôs'}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-extrabold tracking-tight text-[#2C221E] font-mono tabular-nums mt-0.5">
+                  —
+                </p>
+                {onOpenMapping ? (
+                  <button
+                    type="button"
+                    onClick={onOpenMapping}
+                    className="text-xs font-bold text-[#237053] hover:text-[#18523C] underline mt-1 cursor-pointer text-left"
+                  >
+                    Mapear coluna Pessoa/Robô
+                  </button>
+                ) : (
+                  <p className="text-xs font-semibold text-[#395E50] mt-1 truncate">
+                    Coluna não identificada
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Card 3: Peach Blush + Coral 3D Icon */}
       <div className="clay-peach rounded-[24px] p-5 flex flex-col justify-between gap-4">

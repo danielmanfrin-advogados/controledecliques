@@ -1,31 +1,44 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownUp,
+  Bot,
   ChevronLeft,
   ChevronRight,
   Download,
   Eye,
   List,
   Search,
+  UserCheck,
 } from 'lucide-react';
-import { ColumnSchema, ParsedRow } from '../types/sheets';
+import { ClickEventRecord, ColumnSchema, ParsedRow } from '../types/sheets';
 
 interface RawSheetTableProps {
   spreadsheetTitle: string;
   sheetTitle: string;
   columns: ColumnSchema[];
   rows: ParsedRow[];
+  events?: ClickEventRecord[];
+  visitorTypeCol?: string | null;
+  onOpenMapping?: () => void;
+  onOpenRealPeople?: () => void;
   onInspectRow: (row: ParsedRow) => void;
 }
+
+type TrafficFilter = 'all' | 'human' | 'bot';
 
 export const RawSheetTable: React.FC<RawSheetTableProps> = ({
   spreadsheetTitle,
   sheetTitle,
   columns,
   rows,
+  events = [],
+  visitorTypeCol = null,
+  onOpenMapping,
+  onOpenRealPeople,
   onInspectRow,
 }) => {
   const [query, setQuery] = useState('');
+  const [trafficFilter, setTrafficFilter] = useState<TrafficFilter>('all');
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [newestFirst, setNewestFirst] = useState(false);
@@ -39,17 +52,64 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
 
   const pageSize = 50;
 
+  const { eventByRow, hasVisitorType, totalClicks, humanClicks, botClicks, humanRowsCount, botRowsCount } =
+    useMemo(() => {
+      const map = new Map<number, ClickEventRecord>();
+      let visitorFound = Boolean(visitorTypeCol);
+      let total = 0;
+      let human = 0;
+      let bot = 0;
+      let humanRows = 0;
+      let botRows = 0;
+
+      for (const ev of events) {
+        map.set(ev.rowIndex, ev);
+        if (ev.visitorType !== 'unknown' || ev.visitorTypeLabel) {
+          visitorFound = true;
+        }
+        total += ev.clicks;
+        if (ev.visitorType === 'human') {
+          human += ev.clicks;
+          humanRows += 1;
+        } else if (ev.visitorType === 'bot') {
+          bot += ev.clicks;
+          botRows += 1;
+        }
+      }
+
+      return {
+        eventByRow: map,
+        hasVisitorType: visitorFound,
+        totalClicks: total,
+        humanClicks: human,
+        botClicks: bot,
+        humanRowsCount: humanRows,
+        botRowsCount: botRows,
+      };
+    }, [events, visitorTypeCol]);
+
+  const humanSharePct =
+    totalClicks > 0 ? Math.round((humanClicks / totalClicks) * 100) : 0;
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const matched = !q
-      ? rows
-      : rows.filter((row) =>
-          columns.some((c) =>
-            (row.cells[c.key]?.formatted ?? '').toLowerCase().includes(q)
-          )
-        );
+    const matched = rows.filter((row) => {
+      if (trafficFilter !== 'all') {
+        const ev = eventByRow.get(row.rowIndex);
+        if (trafficFilter === 'human' && ev?.visitorType !== 'human') {
+          return false;
+        }
+        if (trafficFilter === 'bot' && ev?.visitorType !== 'bot') {
+          return false;
+        }
+      }
+      if (!q) return true;
+      return columns.some((c) =>
+        (row.cells[c.key]?.formatted ?? '').toLowerCase().includes(q)
+      );
+    });
     return newestFirst ? [...matched].reverse() : matched;
-  }, [rows, columns, query, newestFirst]);
+  }, [rows, columns, query, newestFirst, trafficFilter, eventByRow]);
 
   const totalPages = showAll
     ? 1
@@ -234,6 +294,117 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
             </span>
           </button>
         </div>
+
+        {/* Pessoas Reais summary & quick filter on Planilha tab */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-1">
+          {hasVisitorType ? (
+            <>
+              <button
+                type="button"
+                onClick={onOpenRealPeople}
+                disabled={!onOpenRealPeople}
+                className={`clay-mint rounded-2xl px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-left ${
+                  onOpenRealPeople
+                    ? 'cursor-pointer hover:scale-[1.01] transition-transform'
+                    : ''
+                }`}
+                title={
+                  onOpenRealPeople
+                    ? 'Clique para ver detalhes completos das pessoas reais'
+                    : undefined
+                }
+              >
+                <span className="inline-flex items-center gap-1.5 font-extrabold text-[#1E664B] tabular-nums">
+                  <UserCheck className="w-4 h-4 text-[#2F8F6B]" />
+                  <span>
+                    {humanClicks.toLocaleString('pt-BR')} cliques de pessoas
+                    reais ({humanSharePct}%)
+                  </span>
+                </span>
+                <span className="text-[#4E6B5F] tabular-nums">
+                  <strong className="text-[#8F2D22]">
+                    {botClicks.toLocaleString('pt-BR')}
+                  </strong>{' '}
+                  {botClicks === 1 ? 'robô' : 'robôs'}
+                </span>
+                <span className="text-[#4E6B5F] tabular-nums">
+                  Total: <strong>{totalClicks.toLocaleString('pt-BR')}</strong>
+                </span>
+                {onOpenRealPeople && (
+                  <span className="inline-flex items-center gap-0.5 font-bold text-[#1E664B] underline">
+                    <span>Ver detalhes</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                )}
+              </button>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrafficFilter('all');
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-all tabular-nums ${
+                    trafficFilter === 'all'
+                      ? 'clay-coral-btn text-white'
+                      : 'clay-button-active text-[#3D3028] hover:text-[#E36A42]'
+                  }`}
+                >
+                  Todos ({rows.length.toLocaleString('pt-BR')})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrafficFilter('human');
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-all inline-flex items-center gap-1.5 tabular-nums ${
+                    trafficFilter === 'human'
+                      ? 'bg-[#2F8F6B] text-white shadow-sm'
+                      : 'clay-button-active text-[#1E664B] hover:bg-[#D9ECE4]'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>
+                    Pessoas reais ({humanRowsCount.toLocaleString('pt-BR')})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrafficFilter('bot');
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-all inline-flex items-center gap-1.5 tabular-nums ${
+                    trafficFilter === 'bot'
+                      ? 'bg-[#C84B3C] text-white shadow-sm'
+                      : 'clay-button-active text-[#8F2D22] hover:bg-[#FDE4E1]'
+                  }`}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Robôs ({botRowsCount.toLocaleString('pt-BR')})</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            onOpenMapping && (
+              <div className="clay-butter rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-[#5E4E42]">
+                  Para destacar e contar <strong>Pessoas reais</strong> e{' '}
+                  <strong>Robôs</strong> na planilha, selecione a coluna correspondente.
+                </span>
+                <button
+                  type="button"
+                  onClick={onOpenMapping}
+                  className="px-3 py-1 rounded-xl clay-coral-btn text-white font-bold cursor-pointer"
+                >
+                  Mapear coluna Pessoa/Robô
+                </button>
+              </div>
+            )
+          )}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -279,32 +450,49 @@ export const RawSheetTable: React.FC<RawSheetTableProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EFE5D8] text-xs">
-                {paged.map((row) => (
-                  <tr
-                    key={row.rowIndex}
-                    onClick={() => onInspectRow(row)}
-                    className="hover:bg-[#F7EFE4] transition-colors cursor-pointer"
-                  >
-                    <td className="py-3 px-4 text-right font-mono tabular-nums text-[#8C7A6B]">
-                      {row.rowIndex}
-                    </td>
-                    {columns.map((col) => {
-                      const val = row.cells[col.key]?.formatted;
-                      return (
-                        <td
-                          key={col.key}
-                          className="py-3 px-4 max-w-[280px] truncate text-[#2C221E]"
-                          title={val || ''}
-                        >
-                          {val || <span className="text-[#C7B8A6]">—</span>}
-                        </td>
-                      );
-                    })}
-                    <td className="py-3 px-3 text-right">
-                      <Eye className="w-3.5 h-3.5 text-[#8C7A6B] inline-block" />
-                    </td>
-                  </tr>
-                ))}
+                {paged.map((row) => {
+                  const rowEvent = eventByRow.get(row.rowIndex);
+                  return (
+                    <tr
+                      key={row.rowIndex}
+                      onClick={() => onInspectRow(row)}
+                      className="hover:bg-[#F7EFE4] transition-colors cursor-pointer"
+                    >
+                      <td className="py-3 px-4 text-right font-mono tabular-nums text-[#8C7A6B]">
+                        {row.rowIndex}
+                      </td>
+                      {columns.map((col) => {
+                        const val = row.cells[col.key]?.formatted;
+                        const isVisitorCol =
+                          visitorTypeCol && col.key === visitorTypeCol;
+                        return (
+                          <td
+                            key={col.key}
+                            className="py-3 px-4 max-w-[280px] truncate text-[#2C221E]"
+                            title={val || ''}
+                          >
+                            {isVisitorCol && rowEvent?.visitorType === 'human' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#D9ECE4] text-[#1E664B] font-bold text-[11px]">
+                                <UserCheck className="w-3 h-3" />
+                                <span>{val || 'Pessoa real'}</span>
+                              </span>
+                            ) : isVisitorCol && rowEvent?.visitorType === 'bot' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#FDE4E1] text-[#8F2D22] font-bold text-[11px]">
+                                <Bot className="w-3 h-3" />
+                                <span>{val || 'Robô'}</span>
+                              </span>
+                            ) : (
+                              val || <span className="text-[#C7B8A6]">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="py-3 px-3 text-right">
+                        <Eye className="w-3.5 h-3.5 text-[#8C7A6B] inline-block" />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

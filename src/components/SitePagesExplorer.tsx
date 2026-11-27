@@ -1,4 +1,5 @@
 import React from 'react';
+import { UserCheck } from 'lucide-react';
 import { PageAggregate, SiteAggregate } from '../types/sheets';
 import { getSiteColorTheme } from '../utils/siteColors';
 
@@ -11,6 +12,7 @@ interface SitePagesExplorerProps {
   onSelectSite: (site: string | null) => void;
   onSelectPage: (page: string | null) => void;
   hasUserCol?: boolean;
+  hasVisitorTypeCol?: boolean;
 }
 
 export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
@@ -22,6 +24,7 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
   onSelectSite,
   onSelectPage,
   hasUserCol = false,
+  hasVisitorTypeCol = false,
 }) => {
   const maxSiteClicks = Math.max(1, ...sites.map((s) => s.clicks));
   const maxPageClicks = Math.max(1, ...pages.map((p) => p.clicks));
@@ -66,7 +69,7 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
             Nenhum site com cliques neste período.
           </div>
         ) : (
-          <div className="p-4 space-y-2 max-h-[430px] overflow-y-auto">
+          <div className="p-4 space-y-2 max-h-[430px] overflow-y-auto clay-scrollbar">
             {sites.map((site) => {
               const colorIdx = siteColorIndexMap.get(site.site) ?? 0;
               const theme = getSiteColorTheme(colorIdx);
@@ -114,13 +117,28 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-[#6E5F54] tabular-nums">
-                    <span>
-                      {site.uniquePages}{' '}
-                      {site.uniquePages === 1 ? 'página' : 'páginas'}
-                      {hasUserCol
-                        ? ` · ${site.newUsers.toLocaleString('pt-BR')} novos`
-                        : ` · ${site.sharePct.toFixed(0)}%`}
+                  <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-[#6E5F54] tabular-nums">
+                    <span className="flex items-center gap-1.5 flex-wrap">
+                      <span>
+                        {site.uniquePages}{' '}
+                        {site.uniquePages === 1 ? 'página' : 'páginas'}
+                        {hasUserCol
+                          ? ` · ${site.newUsers.toLocaleString('pt-BR')} novos`
+                          : ` · ${site.sharePct.toFixed(0)}%`}
+                      </span>
+                      {hasVisitorTypeCol && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#D9ECE4] text-[#1E664B] font-bold text-[11px]">
+                          <UserCheck className="w-3 h-3" />
+                          <span>
+                            {site.humanClicks.toLocaleString('pt-BR')} reais
+                            {site.botClicks > 0
+                              ? ` · ${site.botClicks.toLocaleString('pt-BR')} ${
+                                  site.botClicks === 1 ? 'robô' : 'robôs'
+                                }`
+                              : ''}
+                          </span>
+                        </span>
+                      )}
                     </span>
                     <span>
                       {site.lastTimeFormatted !== '—'
@@ -165,7 +183,7 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
             Nenhuma página encontrada neste recorte.
           </div>
         ) : (
-          <div className="p-4 space-y-2 max-h-[430px] overflow-y-auto">
+          <div className="p-4 space-y-2 max-h-[430px] overflow-y-auto clay-scrollbar">
             {pages.map((p, idx) => {
               const colorIdx = siteColorIndexMap.get(p.site) ?? 0;
               const pageTheme = selectedSite
@@ -227,11 +245,26 @@ export const SitePagesExplorer: React.FC<SitePagesExplorerProps> = ({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-[#6E5F54] tabular-nums">
-                    <span>
-                      {p.peakHour !== null
-                        ? `Pico às ${String(p.peakHour).padStart(2, '0')}h`
-                        : `${p.sharePct.toFixed(0)}% dos cliques`}
+                  <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-[#6E5F54] tabular-nums">
+                    <span className="flex items-center gap-1.5 flex-wrap">
+                      <span>
+                        {p.peakHour !== null
+                          ? `Pico às ${String(p.peakHour).padStart(2, '0')}h`
+                          : `${p.sharePct.toFixed(0)}% dos cliques`}
+                      </span>
+                      {hasVisitorTypeCol && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#D9ECE4] text-[#1E664B] font-bold text-[11px]">
+                          <UserCheck className="w-3 h-3" />
+                          <span>
+                            {p.humanClicks.toLocaleString('pt-BR')} reais
+                            {p.botClicks > 0
+                              ? ` · ${p.botClicks.toLocaleString('pt-BR')} ${
+                                  p.botClicks === 1 ? 'robô' : 'robôs'
+                                }`
+                              : ''}
+                          </span>
+                        </span>
+                      )}
                     </span>
                     <span>
                       Último: {p.lastDateFormatted}

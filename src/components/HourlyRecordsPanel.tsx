@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Clock, X } from 'lucide-react';
+import { ChevronRight, Clock, UserCheck, X } from 'lucide-react';
 import { ClickEventRecord } from '../types/sheets';
 import { getSiteColorTheme } from '../utils/siteColors';
 
@@ -9,12 +9,16 @@ interface HourlyRecordsPanelProps {
   selectedHour: number | null;
   onToggleHour: (hour: number) => void;
   periodLabel: string;
+  hasVisitorTypeCol?: boolean;
+  onOpenRealPeople?: () => void;
 }
 
 interface HourDetailRow {
   hour: number;
   rangeLabel: string;
   clicks: number;
+  humanClicks: number;
+  botClicks: number;
   recordCount: number;
   sharePct: number;
   topSite: string | null;
@@ -27,33 +31,53 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
   selectedHour,
   onToggleHour,
   periodLabel,
+  hasVisitorTypeCol = false,
+  onOpenRealPeople,
 }) => {
   const [onlyWithClicks, setOnlyWithClicks] = useState(false);
 
-  const { rows, maxClicks, totalClicks, unscheduledCount } = useMemo(() => {
+  const {
+    rows,
+    maxClicks,
+    totalClicks,
+    totalHumanClicks,
+    totalBotClicks,
+    unscheduledCount,
+    hasVisitorType,
+  } = useMemo(() => {
     const byHour = Array.from({ length: 24 }, (_, hour) => ({
       hour,
       clicks: 0,
+      humanClicks: 0,
+      botClicks: 0,
       recordCount: 0,
       siteMap: new Map<string, number>(),
       pageMap: new Map<string, number>(),
     }));
 
     let unscheduled = 0;
+    let visitorFound = hasVisitorTypeCol;
 
     for (const ev of events) {
+      if (ev.visitorType !== 'unknown' || ev.visitorTypeLabel) {
+        visitorFound = true;
+      }
       if (ev.hourOfDay === null || ev.hourOfDay < 0 || ev.hourOfDay > 23) {
         unscheduled += ev.clicks;
         continue;
       }
       const bucket = byHour[ev.hourOfDay];
       bucket.clicks += ev.clicks;
+      if (ev.visitorType === 'human') bucket.humanClicks += ev.clicks;
+      else if (ev.visitorType === 'bot') bucket.botClicks += ev.clicks;
       bucket.recordCount += 1;
       bucket.siteMap.set(ev.site, (bucket.siteMap.get(ev.site) ?? 0) + ev.clicks);
       bucket.pageMap.set(ev.page, (bucket.pageMap.get(ev.page) ?? 0) + ev.clicks);
     }
 
     const total = byHour.reduce((acc, b) => acc + b.clicks, 0);
+    const totalHuman = byHour.reduce((acc, b) => acc + b.humanClicks, 0);
+    const totalBot = byHour.reduce((acc, b) => acc + b.botClicks, 0);
     const max = Math.max(1, ...byHour.map((b) => b.clicks));
 
     const built: HourDetailRow[] = byHour.map((b) => {
@@ -80,6 +104,8 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
         hour: b.hour,
         rangeLabel: `${hh}:00 – ${hh}:59`,
         clicks: b.clicks,
+        humanClicks: b.humanClicks,
+        botClicks: b.botClicks,
         recordCount: b.recordCount,
         sharePct: total > 0 ? Math.round((b.clicks / total) * 1000) / 10 : 0,
         topSite,
@@ -91,14 +117,20 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
       rows: built,
       maxClicks: max,
       totalClicks: total,
+      totalHumanClicks: totalHuman,
+      totalBotClicks: totalBot,
       unscheduledCount: unscheduled,
+      hasVisitorType: visitorFound,
     };
-  }, [events]);
+  }, [events, hasVisitorTypeCol]);
 
   const visibleRows = useMemo(() => {
     if (!onlyWithClicks) return rows;
     return rows.filter((r) => r.clicks > 0);
   }, [rows, onlyWithClicks]);
+
+  const humanPct =
+    totalClicks > 0 ? Math.round((totalHumanClicks / totalClicks) * 100) : 0;
 
   return (
     <section
@@ -111,6 +143,29 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
             <h2 className="text-base font-bold text-[#2C221E]">
               Registro de Todos os Horários (00h às 23h)
             </h2>
+            {hasVisitorType && (
+              <button
+                type="button"
+                onClick={onOpenRealPeople}
+                disabled={!onOpenRealPeople}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#D9ECE4] text-[11px] font-bold text-[#1E664B] tabular-nums ${
+                  onOpenRealPeople
+                    ? 'cursor-pointer hover:bg-[#CBE4DA] transition-colors'
+                    : ''
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5 text-[#2F8F6B]" />
+                <span>
+                  {totalHumanClicks.toLocaleString('pt-BR')} pessoas reais ({humanPct}%)
+                  {totalBotClicks > 0
+                    ? ` · ${totalBotClicks.toLocaleString('pt-BR')} ${
+                        totalBotClicks === 1 ? 'robô' : 'robôs'
+                      }`
+                    : ''}
+                </span>
+                {onOpenRealPeople && <ChevronRight className="w-3 h-3" />}
+              </button>
+            )}
             {selectedHour !== null && (
               <button
                 type="button"
@@ -170,6 +225,11 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
               <tr className="border-b border-[#EADFD1] bg-[#FAF4EA] text-xs font-bold text-[#5E4E42]">
                 <th className="py-3 px-5 whitespace-nowrap">Faixa de Horário</th>
                 <th className="py-3 px-5 text-right whitespace-nowrap">Cliques</th>
+                {hasVisitorType && (
+                  <th className="py-3 px-5 text-right whitespace-nowrap text-[#1E664B]">
+                    Pessoas Reais
+                  </th>
+                )}
                 <th className="py-3 px-5 whitespace-nowrap min-w-[140px]">Volume</th>
                 <th className="py-3 px-5 text-right whitespace-nowrap">Participação</th>
                 <th className="py-3 px-5 text-right whitespace-nowrap">Registros</th>
@@ -217,6 +277,18 @@ export const HourlyRecordsPanel: React.FC<HourlyRecordsPanelProps> = ({
                     <td className="py-3 px-5 text-right font-mono tabular-nums font-extrabold text-[#2C221E] whitespace-nowrap">
                       {row.clicks.toLocaleString('pt-BR')}
                     </td>
+                    {hasVisitorType && (
+                      <td className="py-3 px-5 text-right font-mono tabular-nums whitespace-nowrap">
+                        <span className="font-extrabold text-[#1E664B]">
+                          {row.humanClicks.toLocaleString('pt-BR')}
+                        </span>
+                        {row.botClicks > 0 && (
+                          <span className="text-[11px] text-[#8F2D22] ml-1">
+                            ({row.botClicks.toLocaleString('pt-BR')} rob.)
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="py-3 px-5">
                       <div className="w-full h-2.5 rounded-full bg-[#EDE4D8] overflow-hidden">
                         {barWidth > 0 && (
