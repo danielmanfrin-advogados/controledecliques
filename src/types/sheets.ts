@@ -77,7 +77,10 @@ export interface ClickColumnMapping {
   nameCol?: string | null;
   cityCol?: string | null;
   deviceCol?: string | null;
+  visitorTypeCol?: string | null;
 }
+
+export type VisitorTrafficType = 'human' | 'bot' | 'unknown';
 
 export interface ClickEventRecord {
   rowIndex: number;
@@ -94,6 +97,8 @@ export interface ClickEventRecord {
   city: string | null;
   device: string | null;
   isNewUserFlag: boolean | null;
+  visitorType: VisitorTrafficType;
+  visitorTypeLabel: string | null;
   rawRow: ParsedRow;
 }
 

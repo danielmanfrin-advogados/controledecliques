@@ -18,6 +18,7 @@ import {
   UserDaySummary,
   UserSiteSummary,
   UsersAnalyticsSummary,
+  VisitorTrafficType,
 } from '../types/sheets';
 import { SheetRawValues } from '../services/googleSheetsApi';
 
@@ -617,6 +618,88 @@ function normalizeLabel(label: string): string {
     .trim();
 }
 
+function classifyVisitorValue(
+  rawValue: string | null | undefined,
+  colLabelNorm?: string
+): VisitorTrafficType {
+  if (!rawValue) return 'unknown';
+  const val = normalizeLabel(rawValue);
+  if (!val || val === '-' || val === '—') return 'unknown';
+
+  const isBotWord =
+    val === 'robo' ||
+    val === 'robos' ||
+    val === 'bot' ||
+    val === 'bots' ||
+    val === 'crawler' ||
+    val === 'spider' ||
+    val === 'scraper' ||
+    val === 'automacao' ||
+    val === 'automatico' ||
+    val === 'script' ||
+    val === 'fake' ||
+    val === 'falso' ||
+    /\b(robo|robos|bot|bots|crawler|spider|scraper)\b/.test(val);
+
+  const isNegatedBot =
+    val.includes('nao robo') ||
+    val.includes('nao e robo') ||
+    val.includes('sem robo') ||
+    val.includes('not bot') ||
+    val.includes('no bot');
+
+  if (isNegatedBot) return 'human';
+
+  const isHumanWord =
+    val === 'pessoa real' ||
+    val === 'pessoa' ||
+    val === 'pessoas' ||
+    val === 'humano' ||
+    val === 'humana' ||
+    val === 'human' ||
+    val === 'real' ||
+    val === 'usuario real' ||
+    val === 'visitante real' ||
+    val === 'legitimo' ||
+    val === 'valido' ||
+    val.includes('pessoa real') ||
+    val.includes('humano') ||
+    val.includes('humana') ||
+    val.includes('usuario real') ||
+    val.includes('visitante real');
+
+  if (isHumanWord && !isBotWord) return 'human';
+  if (isBotWord) return 'bot';
+
+  const isTrueBool =
+    val === 'sim' ||
+    val === 's' ||
+    val === 'yes' ||
+    val === 'true' ||
+    val === '1' ||
+    val === 'verdadeiro';
+  const isFalseBool =
+    val === 'nao' ||
+    val === 'n' ||
+    val === 'no' ||
+    val === 'false' ||
+    val === '0' ||
+    val === 'falso';
+
+  if ((isTrueBool || isFalseBool) && colLabelNorm) {
+    const headerAsksBot =
+      (colLabelNorm.includes('robo') || /\bbot\b/.test(colLabelNorm)) &&
+      !colLabelNorm.includes('pessoa') &&
+      !colLabelNorm.includes('human');
+    if (headerAsksBot) {
+      return isTrueBool ? 'bot' : 'human';
+    }
+    return isTrueBool ? 'human' : 'bot';
+  }
+
+  return 'unknown';
+}
+
 export function inferClickColumnMapping(
   columns: ColumnSchema[],
   rows: ParsedRow[]
@@ -631,7 +714,73 @@ export function inferClickColumnMapping(
     return null;
   };
 
+  const findByWordToken = (tokens: string[], excludeKeys: Set<string>) => {
+    for (const token of tokens) {
+      const re = new RegExp(`(^|[\\s_\\-/])${token}($|[\\s_\\-/])`);
+      const match = columns.find(
+        (c) => !excludeKeys.has(c.key) && re.test(normalizeLabel(c.label))
+      );
+      if (match) return match.key;
+    }
+    return null;
+  };
+
   const used = new Set<string>();
+
+  // 0. Visitor Type: Real Person vs Bot (check before site/name/user so "Origem (Pessoa/Robô)" or "Pessoa Real" isn't stolen)
+  let visitorTypeCol = findByKeywords(
+    [
+      'pessoa_real',
+      'pessoa real',
+      'pessoa_ou_robo',
+      'pessoa ou robo',
+      'pessoa/robo',
+      'humano_ou_robo',
+      'humano ou robo',
+      'tipo_clique',
+      'tipo_acesso',
+      'tipo_visitante',
+      'origem_clique',
+      'eh_robo',
+      'e_robo',
+      'is_bot',
+      'is_human',
+      'autenticidade',
+      'crawler',
+    ],
+    used
+  );
+  if (!visitorTypeCol) {
+    visitorTypeCol = findByWordToken(
+      ['robo', 'robos', 'bot', 'bots', 'humano', 'humanos', 'humana', 'trafego'],
+      used
+    );
+  }
+  if (!visitorTypeCol) {
+    const sampleCol = columns.find((c) => {
+      if (
+        used.has(c.key) ||
+        c.type === 'date' ||
+        c.type === 'currency' ||
+        c.type === 'percent' ||
+        c.type === 'number'
+      ) {
+        return false;
+      }
+      const samples = rows
+        .slice(0, 25)
+        .map((r) => (r.cells[c.key]?.formatted ?? '').trim())
+        .filter(Boolean);
+      if (samples.length === 0) return false;
+      const colNorm = normalizeLabel(c.label);
+      const hits = samples.filter(
+        (v) => classifyVisitorValue(v, colNorm) !== 'unknown'
+      ).length;
+      return hits >= Math.max(1, Math.ceil(samples.length * 0.35));
+    });
+    if (sampleCol) visitorTypeCol = sampleCol.key;
+  }
+  if (visitorTypeCol) used.add(visitorTypeCol);
 
   // 1. Site
   let siteCol = findByKeywords(
@@ -741,17 +890,6 @@ export function inferClickColumnMapping(
   }
 
   // 5b. Device / City / Name (detect before user fallback so Aparelho/Cidade/Nome are separated cleanly)
-  const findByWordToken = (tokens: string[], excludeKeys: Set<string>) => {
-    for (const token of tokens) {
-      const re = new RegExp(`(^|[\\s_\\-/])${token}($|[\\s_\\-/])`);
-      const match = columns.find(
-        (c) => !excludeKeys.has(c.key) && re.test(normalizeLabel(c.label))
-      );
-      if (match) return match.key;
-    }
-    return null;
-  };
-
   let deviceCol = findByKeywords(
     [
       'aparelho',
@@ -793,7 +931,7 @@ export function inferClickColumnMapping(
   if (cityCol) used.add(cityCol);
 
   let nameCol = findByKeywords(
-    ['nome_completo', 'nome_usuario', 'nome_cliente', 'pessoa', 'autor'],
+    ['nome_completo', 'nome_usuario', 'nome_cliente', 'autor'],
     used
   );
   if (!nameCol) {
@@ -933,6 +1071,7 @@ export function inferClickColumnMapping(
     nameCol,
     cityCol,
     deviceCol,
+    visitorTypeCol,
   };
 }
 
@@ -1039,6 +1178,11 @@ export function buildClickEvents(
     const city = cleanOptionalCell(mapping.cityCol);
     const device = cleanOptionalCell(mapping.deviceCol);
     const userId = cleanOptionalCell(mapping.userCol) ?? userName;
+    const visitorTypeLabel = cleanOptionalCell(mapping.visitorTypeCol);
+    const visitorType = classifyVisitorValue(
+      visitorTypeLabel,
+      mapping.visitorTypeCol ? normalizeLabel(mapping.visitorTypeCol) : undefined
+    );
 
     let isNewUserFlag: boolean | null = null;
     if (mapping.newUserCol) {
@@ -1090,6 +1234,8 @@ export function buildClickEvents(
       city,
       device,
       isNewUserFlag,
+      visitorType,
+      visitorTypeLabel,
       rawRow: row,
     };
   });
@@ -1204,7 +1350,7 @@ export function filterClickEvents(
 
     if (searchLower) {
       const hay =
-        `${ev.site} ${ev.page} ${ev.dateFormatted} ${ev.timeFormatted} ${ev.userName ?? ''} ${ev.userId ?? ''} ${ev.city ?? ''} ${ev.device ?? ''}`.toLowerCase();
+        `${ev.site} ${ev.page} ${ev.dateFormatted} ${ev.timeFormatted} ${ev.userName ?? ''} ${ev.userId ?? ''} ${ev.city ?? ''} ${ev.device ?? ''} ${ev.visitorTypeLabel ?? ''}`.toLowerCase();
       if (!hay.includes(searchLower)) return false;
     }
 
@@ -1874,6 +2020,9 @@ export function exportClickEventsCsv(
   const includeUser = events.some((ev) => Boolean(ev.userName || ev.userId));
   const includeCity = events.some((ev) => Boolean(ev.city));
   const includeDevice = events.some((ev) => Boolean(ev.device));
+  const includeVisitorType = events.some(
+    (ev) => ev.visitorType !== 'unknown' || Boolean(ev.visitorTypeLabel)
+  );
 
   const headers = [
     'Data',
@@ -1881,6 +2030,7 @@ export function exportClickEventsCsv(
     ...(includeUser ? ['Nome / Usuário'] : []),
     ...(includeCity ? ['Cidade'] : []),
     ...(includeDevice ? ['Aparelho'] : []),
+    ...(includeVisitorType ? ['Pessoa / Robô'] : []),
     'Site',
     'Página Clicada',
     'Cliques',
@@ -1892,6 +2042,16 @@ export function exportClickEventsCsv(
       ...(includeUser ? [ev.userName ?? ev.userId ?? ''] : []),
       ...(includeCity ? [ev.city ?? ''] : []),
       ...(includeDevice ? [ev.device ?? ''] : []),
+      ...(includeVisitorType
+        ? [
+            ev.visitorTypeLabel ??
+              (ev.visitorType === 'human'
+                ? 'Pessoa real'
+                : ev.visitorType === 'bot'
+                ? 'Robô'
+                : ''),
+          ]
+        : []),
       ev.site,
       ev.page,
       String(ev.clicks),

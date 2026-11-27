@@ -60,7 +60,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           </button>
         </div>
 
-        <div className="p-6 space-y-4 text-xs">
+        <div className="p-6 space-y-4 text-xs max-h-[70vh] overflow-y-auto clay-scrollbar">
           <div>
             <label className="block font-bold text-[#4A3B31] mb-1.5">
               Linha de cabeçalho
@@ -282,6 +282,29 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-[#4A3B31] mb-1.5">
+              Coluna Pessoa Real / Robô (opcional)
+            </label>
+            <select
+              value={draft.visitorTypeCol ?? ''}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  visitorTypeCol: e.target.value || null,
+                }))
+              }
+              className="w-full px-3.5 py-2.5 rounded-2xl clay-input border border-[#EADFD1] text-[#2C221E] focus:outline-none focus:ring-2 focus:ring-[#E36A42]"
+            >
+              <option value="">Não mapeada</option>
+              {columns.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

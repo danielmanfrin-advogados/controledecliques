@@ -613,6 +613,7 @@ export default function App() {
         nameCol: null,
         cityCol: null,
         deviceCol: null,
+        visitorTypeCol: null,
       };
     }
     const inferred = inferClickColumnMapping(dataset.columns, dataset.rows);
@@ -633,6 +634,10 @@ export default function App() {
         'deviceCol' in customMapping
           ? customMapping.deviceCol ?? null
           : inferred.deviceCol ?? null,
+      visitorTypeCol:
+        'visitorTypeCol' in customMapping
+          ? customMapping.visitorTypeCol ?? null
+          : inferred.visitorTypeCol ?? null,
     };
   }, [dataset, customMapping]);
 
@@ -1471,6 +1476,8 @@ export default function App() {
                     pages={scopedPagesAgg}
                     hourlyBuckets={hourlyBuckets}
                     periodLabel={periodLabel}
+                    hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
+                    onOpenMapping={() => setShowMappingModal(true)}
                   />
 
                   {usersSummary.hasUserCol && (
@@ -1596,6 +1603,8 @@ export default function App() {
                     events={scopedEvents}
                     siteColorIndexMap={siteColorIndexMap}
                     onInspectRow={setInspectedRow}
+                    hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
+                    onOpenMapping={() => setShowMappingModal(true)}
                   />
                 </>
               )}
@@ -1607,6 +1616,8 @@ export default function App() {
                   events={scopedEvents}
                   siteColorIndexMap={siteColorIndexMap}
                   onInspectRow={setInspectedRow}
+                  hasVisitorTypeCol={Boolean(effectiveMapping.visitorTypeCol)}
+                  onOpenMapping={() => setShowMappingModal(true)}
                 />
               )}
 
