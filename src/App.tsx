@@ -184,7 +184,13 @@ export default function App() {
   userRef.current = user;
   const selectedSpreadsheetIdRef = useRef<string | null>(null);
   selectedSpreadsheetIdRef.current = selectedSpreadsheetId;
-  const hasAutoPickedPeriodRef = useRef<boolean>(false);
+
+  const resetToTodayPeriod = useCallback(() => {
+    setPeriod('day');
+    setReferenceDate(new Date());
+    setCustomStart('');
+    setCustomEnd('');
+  }, []);
 
   const handleAuthExpired = useCallback(() => {
     clearCachedToken();
@@ -318,6 +324,7 @@ export default function App() {
       if (selectedSpreadsheetIdRef.current) return;
       const saved = loadLastSheetSelection(uid);
       if (saved) {
+        resetToTodayPeriod();
         setSelectedSpreadsheetId(saved.spreadsheetId);
         fetchSheetData(
           saved.spreadsheetId,
@@ -328,7 +335,7 @@ export default function App() {
         );
       }
     },
-    [fetchSheetData]
+    [fetchSheetData, resetToTodayPeriod]
   );
 
   useEffect(() => {
@@ -373,6 +380,7 @@ export default function App() {
       setNeedsAuth(false);
       setTokenNeedsRenewal(false);
       setRenewalError(null);
+      resetToTodayPeriod();
       restoreOrFetchSavedSheet(result.user.uid, result.accessToken);
     } catch (err: unknown) {
       const msg =
@@ -396,6 +404,7 @@ export default function App() {
       setNeedsAuth(false);
       setTokenNeedsRenewal(false);
       setRenewalError(null);
+      resetToTodayPeriod();
       restoreOrFetchSavedSheet(result.user.uid, result.accessToken);
     } catch (err: unknown) {
       const msg =
@@ -418,6 +427,7 @@ export default function App() {
       setAccessToken(result.accessToken);
       setTokenNeedsRenewal(false);
       setNeedsAuth(false);
+      resetToTodayPeriod();
       if (openPickerAfter) {
         setShowPickerModal(true);
       } else if (selectedSpreadsheetId) {
@@ -475,6 +485,7 @@ export default function App() {
       setSelectedSite(null);
       setSelectedPage(null);
       setSelectedHour(null);
+      resetToTodayPeriod();
       setShowPickerModal(false);
     } catch (err: unknown) {
       const msg =
@@ -501,6 +512,7 @@ export default function App() {
     setDataset(null);
     setRawValues(null);
     setCustomMapping(null);
+    resetToTodayPeriod();
   };
 
   const loadSavedMapping = (spreadsheetId: string, sheetTitle: string) => {
@@ -527,7 +539,7 @@ export default function App() {
     setSelectedHour(null);
     setSearch('');
     setSyncDiff(null);
-    hasAutoPickedPeriodRef.current = false;
+    resetToTodayPeriod();
     fetchSheetData(spreadsheetId, undefined, undefined, false);
   };
 
@@ -540,7 +552,7 @@ export default function App() {
     setSelectedHour(null);
     setSearch('');
     setSyncDiff(null);
-    hasAutoPickedPeriodRef.current = false;
+    resetToTodayPeriod();
     fetchSheetData(selectedSpreadsheetId, tabTitle, undefined, false);
   };
 
@@ -667,35 +679,6 @@ export default function App() {
     const map = new Map<string, number>();
     agg.forEach((s, idx) => map.set(s.site, idx));
     return map;
-  }, [allClickEvents]);
-
-  useEffect(() => {
-    if (hasAutoPickedPeriodRef.current || allClickEvents.length === 0) return;
-    hasAutoPickedPeriodRef.current = true;
-
-    const now = new Date();
-    const checkPeriod = (p: PeriodPreset, ref: Date) =>
-      filterClickEvents(allClickEvents, {
-        period: p,
-        referenceDate: ref,
-      }).length > 0;
-
-    if (checkPeriod('day', now)) {
-      setReferenceDate(now);
-      setPeriod('day');
-    } else if (checkPeriod('week', now)) {
-      setReferenceDate(now);
-      setPeriod('week');
-    } else if (checkPeriod('month', now)) {
-      setReferenceDate(now);
-      setPeriod('month');
-    } else if (checkPeriod('year', now)) {
-      setReferenceDate(now);
-      setPeriod('year');
-    } else {
-      setReferenceDate(now);
-      setPeriod('all');
-    }
   }, [allClickEvents]);
 
   const periodEvents = useMemo(() => {
